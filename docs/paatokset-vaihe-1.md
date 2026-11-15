@@ -18,6 +18,8 @@ Päiväys: 15.11.2026
 
 10. **Valitusta videosta tehdään työkopio sovelluksen omaan tallennustilaan** (lisätty ensimmäisen puhelintestin jälkeen). Xiaomin Android-puhelimessa Chrome lakkasi lukemasta valittua tiedostoa kesken käytön (`MEDIA_ELEMENT_ERROR: Format error`). Alkuperäinen päätös oli, ettei omaa videota tallenneta sovellukseen lainkaan. Nyt viimeisin työkopio on laitteessa siihen asti, kun valitaan uusi video tai sovellus avataan uudelleen. Jos väärin: korjaus ei auta, jos puhelin ei anna lukea tiedostoa edes ensimmäisellä kerralla; silloin sovellus sanoo sen suoraan.
 
+11. **Androidissa videon valinta ohittaa järjestelmän kuvavalitsimen** (lisätty toisen puhelintestin lokin perusteella). Loki osoitti, että Chrome sai valitun tiedoston luettua vain hetken valinnan jälkeen, joskus alle 0,1 sekuntia (`NotReadableError`). Tiedostojen nimet olivat pelkkiä numeroita, mikä viittaa Androidin kuvavalitsimen välitystiedostoon; sama vika on kuvattu Chromiumin virheraportissa 40123366 ja useissa muissa projekteissa. Tiedostokentän hyväksyttyihin tyyppeihin lisättiin yksi keksitty tyyppi, jolloin Chrome avaa tavallisen tiedostovalinnan. Lisäksi epäonnistunut luku yritetään kolme kertaa uudelleen, ja lukuvirheen jälkeen tarjotaan valinta tiedostoselaimesta. Jos väärin: valinta näyttää Androidissa erilaiselta kuin ennen eikä vika silti poistu; silloin loki kertoo, mitä valitsinta käytettiin ja missä kohdassa luku katkesi.
+
 ## 2. Varmentamatta jääneet korjaukset
 
 Nämä tehtiin tarkastuksen perusteella, mutta niitä ei voitu todentaa tietokoneen selaimella.

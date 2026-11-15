@@ -5,12 +5,13 @@ import { mirrorLandmarks } from '../core/skeleton.js';
 import { drawSkeleton } from '../render/overlay.js';
 import { StoreFullError } from '../store/db.js';
 import { diag } from '../core/diag.js';
+import { SourceReadError } from '../store/scratch.js';
 import { defaultKeepVideo, formatBytes } from '../core/limits.js';
 import { COPY } from './copy.js';
 import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, MIN_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, videoAccept, MIN_DETECTED_SHARE } from './process.js';
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -34,29 +35,36 @@ export async function render(root, ctx) {
     stage = null;
   };
 
-  function stepPick() {
+  /** @param {boolean} [offerBrowse] näytetäänkö varavalinta tiedostoselaimesta (lukuvirheen jälkeen) */
+  function stepPick(offerBrowse = false) {
     dispose();
-    const input = h('input', { type: 'file', id: 'ref-file', accept: 'video/*', class: 'visually-hidden' });
-    input.addEventListener('change', () => {
-      const file = input.files && input.files[0];
-      if (file) stepOpen(file);
-    });
+    const fileInput = (id, accept, picker) => {
+      const input = h('input', { type: 'file', id, accept, class: 'visually-hidden' });
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (file) stepOpen(file, picker);
+      });
+      return input;
+    };
     setChildren(body, h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
-      h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
+      h('label', { class: 'btn btn-primary btn-block file-btn' }, fileInput('ref-file', videoAccept(), 'tavallinen'), 'Valitse video'),
+      // Ilman tyyppirajausta puhelin avaa tiedostoselaimen, jonka antama tiedosto pysyy luettavana.
+      offerBrowse ? h('label', { class: 'btn btn-block file-btn' }, fileInput('ref-file-any', null, 'tiedostoselain'), COPY.browseFiles) : null,
+      offerBrowse ? h('p', { class: 'hint', text: COPY.browseFilesHint }) : null,
       h('p', { class: 'hint', text: COPY.privacy }),
     );
   }
 
   /** Tekee valitusta videosta työkopion. Jos tiedostoa ei saa luettua, palataan valintaan. */
-  async function stepOpen(picked) {
+  async function stepOpen(picked, picker) {
     dispose();
     showError('');
     let file;
     try {
-      file = await openChosenFile(body, ctx, picked, 'malli');
+      file = await openChosenFile(body, ctx, picked, 'malli', picker);
     } catch (e) {
       if (disposed) return;
-      stepPick();
+      stepPick(e instanceof SourceReadError);
       showError(errorText(e), errorDetail(e));
       return;
     }
@@ -83,7 +91,7 @@ export async function render(root, ctx) {
       h('p', { class: 'hint', text: 'Valitse kohta, jossa tanssi alkaa ja loppuu.' }),
       holder,
       h('button', { type: 'button', class: 'btn btn-primary btn-block', onClick: () => stepProcess(file, trim.getRange()) }, 'Jatka'),
-      h('button', { type: 'button', class: 'btn btn-block', onClick: stepPick }, 'Vaihda video'),
+      h('button', { type: 'button', class: 'btn btn-block', onClick: () => stepPick() }, 'Vaihda video'),
     );
   }
 

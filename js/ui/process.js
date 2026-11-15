@@ -71,9 +71,32 @@ export async function describeFile(file) {
   return text;
 }
 
-/** Kirjaa valitun tiedoston tyypin ja koon sekä selaimen toistokyvyn. Nimeä ei kirjata. */
-export function logChosenFile(file, purpose) {
-  diag.log('video-valittu', { käyttö: purpose, tyyppi: file.type || 'tuntematon', 'koko-mt': (file.size / (1024 * 1024)).toFixed(1) });
+/**
+ * Tiedostokentän accept-arvo videon valintaan.
+ *
+ * Androidin Chrome avaa järjestelmän kuvavalitsimen, kun kaikki hyväksytyt tyypit ovat kuvia tai videoita.
+ * Kuvavalitsin antaa selaimelle välitystiedoston, jonka lukeminen katkeaa osassa puhelimista pian valinnan
+ * jälkeen (NotReadableError). Yksi keksitty muu tyyppi saa Chromen avaamaan tavallisen tiedostovalinnan.
+ */
+export function videoAccept() {
+  return /Android/i.test(navigator.userAgent) ? 'video/*,application/x-tanssipeili' : 'video/*';
+}
+
+/**
+ * Kirjaa valitun tiedoston tyypin ja koon sekä selaimen toistokyvyn. Nimeä ei kirjata, vain sen muoto:
+ * pelkistä numeroista koostuva nimi viittaa Androidin kuvavalitsimen välitystiedostoon.
+ * @param {File} file
+ * @param {string} purpose
+ * @param {'tavallinen'|'tiedostoselain'|'kamera'} [picker]
+ */
+export function logChosenFile(file, purpose, picker = 'tavallinen') {
+  diag.log('video-valittu', {
+    käyttö: purpose,
+    tyyppi: file.type || 'tuntematon',
+    'koko-mt': (file.size / (1024 * 1024)).toFixed(1),
+    'nimi-muoto': /^\d+(\.\w+)?$/.test(file.name || '') ? 'numerot' : 'muu',
+    valitsin: picker,
+  });
   if (!playSupportLogged) {
     playSupportLogged = true;
     const probe = document.createElement('video');
@@ -90,12 +113,13 @@ export function logChosenFile(file, purpose) {
  * @param {{state: {analysis?: {file: Blob}|null}}} ctx
  * @param {File} picked
  * @param {string} purpose
+ * @param {'tavallinen'|'tiedostoselain'|'kamera'} [picker]
  * @returns {Promise<File>}
  */
-export async function openChosenFile(body, ctx, picked, purpose) {
+export async function openChosenFile(body, ctx, picked, purpose, picker) {
   const progress = h('progress', { 'aria-label': 'Videon avaamisen eteneminen' });
   setChildren(body, h('h2', { text: 'Avataan videota' }), progress, h('p', { class: 'hint', role: 'status', text: 'Video kopioidaan sovelluksen käyttöön tässä puhelimessa.' }));
-  logChosenFile(picked, purpose);
+  logChosenFile(picked, purpose, picker);
   // Aiemmat työkopiot poistetaan, paitsi se, jota näkyvissä pidettävä analyysin tulos vielä käyttää.
   await clearScratch([scratchNameOf(ctx.state?.analysis?.file)]);
   const stash = await stashFile(picked, {

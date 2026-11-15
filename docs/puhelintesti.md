@@ -10,6 +10,13 @@ Kirjaa jokaisen kohdan perään, mitä tapahtui. Pelkkä "toimi" tai "ei toiminu
 
 Avaa Asetukset ja katso kohdasta Vianmääritys sovelluksen versio. Selain voi näyttää vanhaa versiota noin 10 minuuttia päivityksen jälkeen. Jos versio on vanha, odota hetki ja lataa sivu uudelleen.
 
+## Videon valinta Androidissa
+
+Painike Valitse video tai Valitse galleriasta avaa nyt Chromen oman valinnan eikä puhelimen kuvavalitsinta. Valitse siitä Tiedostot ja hae video (yleensä kansiosta DCIM/Camera tai Videot).
+
+- [ ] Millainen valinta aukesi? (Kuvaruudukko, Tiedostot-selain, vai valikko jossa on Kamera ja Tiedostot.)
+- [ ] Aukesiko video ilman virhettä kolmella peräkkäisellä yrityksellä?
+
 ## Jos jokin ei toimi
 
 1. Kirjoita muistiin virheilmoitus ja sen alla oleva rivi "Tekninen tieto".

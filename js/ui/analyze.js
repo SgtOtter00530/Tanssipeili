@@ -5,11 +5,12 @@ import { projectReference } from '../core/normalize.js';
 import { levelOf } from '../core/compare.js';
 import { drawSkeleton, COLORS } from '../render/overlay.js';
 import { diag } from '../core/diag.js';
+import { SourceReadError } from '../store/scratch.js';
 import { COPY } from './copy.js';
 import { h, formatDuration, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, videoAccept, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
 
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
@@ -72,37 +73,41 @@ export async function render(root, ctx) {
     renderList();
   }
 
-  function stepPickVideo(ref) {
+  /** @param {boolean} [offerBrowse] näytetäänkö varavalinta tiedostoselaimesta (lukuvirheen jälkeen) */
+  function stepPickVideo(ref, offerBrowse = false) {
     dispose();
-    const onFile = (input) => input.addEventListener('change', () => {
-      const file = input.files && input.files[0];
-      if (file) stepOpen(ref, file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria');
-    });
-    const camera = h('input', { type: 'file', id: 'pick-camera', accept: 'video/*', capture: 'environment', class: 'visually-hidden' });
-    const gallery = h('input', { type: 'file', id: 'pick-gallery', accept: 'video/*', class: 'visually-hidden' });
-    onFile(camera);
-    onFile(gallery);
+    const fileInput = (id, attrs, purpose, picker) => {
+      const input = h('input', { type: 'file', id, class: 'visually-hidden', ...attrs });
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if (file) stepOpen(ref, file, purpose, picker);
+      });
+      return input;
+    };
     setChildren(body, h('div', { class: 'chosen-ref' },
         h('p', { text: `Malli: ${ref.name}` }),
         h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => stepPickReference() }, 'Vaihda malli')),
       h('p', { class: 'notice notice-info', text: COPY.filmingGuide }),
       h('div', { class: 'file-actions' },
-        h('label', { class: 'btn btn-primary btn-block file-btn' }, camera, 'Kuvaa nyt'),
-        h('label', { class: 'btn btn-block file-btn' }, gallery, 'Valitse galleriasta')),
+        h('label', { class: 'btn btn-primary btn-block file-btn' }, fileInput('pick-camera', { accept: 'video/*', capture: 'environment' }, 'oma-kamera', 'kamera'), 'Kuvaa nyt'),
+        h('label', { class: 'btn btn-block file-btn' }, fileInput('pick-gallery', { accept: videoAccept() }, 'oma-galleria', 'tavallinen'), 'Valitse galleriasta'),
+        // Ilman tyyppirajausta puhelin avaa tiedostoselaimen, jonka antama tiedosto pysyy luettavana.
+        offerBrowse ? h('label', { class: 'btn btn-block file-btn' }, fileInput('pick-any', {}, 'oma-galleria', 'tiedostoselain'), COPY.browseFiles) : null),
+      offerBrowse ? h('p', { class: 'hint', text: COPY.browseFilesHint }) : null,
       h('p', { class: 'hint', text: COPY.privacy }),
     );
   }
 
   /** Tekee valitusta videosta työkopion. Jos tiedostoa ei saa luettua, palataan valintaan. */
-  async function stepOpen(ref, picked, purpose) {
+  async function stepOpen(ref, picked, purpose, picker) {
     dispose();
     showError('');
     let file;
     try {
-      file = await openChosenFile(body, ctx, picked, purpose);
+      file = await openChosenFile(body, ctx, picked, purpose, picker);
     } catch (e) {
       if (disposed) return;
-      stepPickVideo(ref);
+      stepPickVideo(ref, e instanceof SourceReadError);
       showError(errorText(e), errorDetail(e));
       return;
     }

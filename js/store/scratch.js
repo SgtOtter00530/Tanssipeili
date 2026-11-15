@@ -26,13 +26,28 @@ export class SourceReadError extends Error {
 
 const describe = (e) => `${e && e.name ? e.name : 'virhe'}: ${e && e.message ? e.message : e}`;
 const megabytes = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function readChunk(file, offset) {
-  try {
-    return await file.slice(offset, Math.min(file.size, offset + CHUNK_BYTES)).arrayBuffer();
-  } catch (e) {
-    throw new SourceReadError(`${describe(e)} (kohdassa ${megabytes(offset)} / ${megabytes(file.size)} Mt)`);
+/** Lukuyritykset epäonnistuneen palan jälkeen. Puhelimen antama tiedostoviittaus voi pätkiä hetkellisesti. */
+const READ_RETRIES = 3;
+const RETRY_DELAY_MS = 250;
+
+/** @param {{retries: number}} stats */
+async function readChunk(file, offset, stats) {
+  let last = null;
+  for (let attempt = 0; attempt <= READ_RETRIES; attempt++) {
+    if (attempt > 0) {
+      stats.retries++;
+      await wait(RETRY_DELAY_MS * attempt);
+    }
+    try {
+      return await file.slice(offset, Math.min(file.size, offset + CHUNK_BYTES)).arrayBuffer();
+    } catch (e) {
+      last = e;
+    }
   }
+  // Kohta ensin: loki lyhentää pitkät rivit, ja kohta on tiedoista tärkein.
+  throw new SourceReadError(`kohdassa ${megabytes(offset)}/${megabytes(file.size)} Mt, ${READ_RETRIES} uusintaa: ${last && last.name ? last.name : 'virhe'}`);
 }
 
 async function scratchDir(create) {
@@ -40,7 +55,7 @@ async function scratchDir(create) {
   return root.getDirectoryHandle(DIR, { create });
 }
 
-async function copyToOpfs(file, onProgress) {
+async function copyToOpfs(file, onProgress, stats) {
   const dir = await scratchDir(true);
   const ext = (EXTENSIONS.exec(file.name || '') || ['.mp4'])[0].toLowerCase();
   const name = `video-${Date.now()}-${++counter}${ext}`;
@@ -49,7 +64,7 @@ async function copyToOpfs(file, onProgress) {
   try {
     writable = await handle.createWritable();
     for (let offset = 0; offset < file.size; offset += CHUNK_BYTES) {
-      await writable.write(await readChunk(file, offset));
+      await writable.write(await readChunk(file, offset, stats));
       onProgress?.(Math.min(file.size, offset + CHUNK_BYTES), file.size);
     }
     await writable.close();
@@ -67,10 +82,10 @@ async function copyToOpfs(file, onProgress) {
   }
 }
 
-async function copyToMemory(file, onProgress) {
+async function copyToMemory(file, onProgress, stats) {
   const parts = [];
   for (let offset = 0; offset < file.size; offset += CHUNK_BYTES) {
-    parts.push(await readChunk(file, offset));
+    parts.push(await readChunk(file, offset, stats));
     onProgress?.(Math.min(file.size, offset + CHUNK_BYTES), file.size);
   }
   return { file: new File(parts, 'video', { type: file.type || 'video/mp4' }), name: null, where: 'muisti' };
@@ -86,8 +101,9 @@ async function copyToMemory(file, onProgress) {
  */
 export async function stashFile(file, opts = {}) {
   const t0 = performance.now();
+  const stats = { retries: 0 };
   const done = (result, extra = {}) => {
-    diag.log('video-kopio', { tila: 'ok', paikka: result.where, 'koko-mt': megabytes(file.size), ms: Math.round(performance.now() - t0), ...extra });
+    diag.log('video-kopio', { tila: 'ok', paikka: result.where, 'koko-mt': megabytes(file.size), ms: Math.round(performance.now() - t0), uusintoja: stats.retries, ...extra });
     return result;
   };
   if (!(file.size > 0)) {
@@ -96,7 +112,7 @@ export async function stashFile(file, opts = {}) {
   }
   let opfsError = '';
   try {
-    return done(await copyToOpfs(file, opts.onProgress));
+    return done(await copyToOpfs(file, opts.onProgress, stats));
   } catch (e) {
     if (e instanceof SourceReadError) {
       diag.log('video-kopio', { tila: 'virhe', tieto: e.detail });
@@ -106,7 +122,7 @@ export async function stashFile(file, opts = {}) {
   }
   if (file.size <= MEMORY_MAX_BYTES) {
     try {
-      return done(await copyToMemory(file, opts.onProgress), { 'opfs-virhe': opfsError });
+      return done(await copyToMemory(file, opts.onProgress, stats), { 'opfs-virhe': opfsError });
     } catch (e) {
       if (e instanceof SourceReadError) {
         diag.log('video-kopio', { tila: 'virhe', tieto: e.detail });

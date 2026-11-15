@@ -20,7 +20,7 @@ export async function withPage(fn, opts = {}) {
     args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--disable-background-networking', '--disable-sync', '--no-first-run'],
   });
   try {
-    const context = await browser.newContext({ viewport: opts.viewport || { width: 390, height: 844 } });
+    const context = await browser.newContext({ viewport: opts.viewport || { width: 390, height: 844 }, ...(opts.userAgent ? { userAgent: opts.userAgent } : {}) });
     const page = await context.newPage();
     page.setDefaultTimeout(30000);
     const externalRequests = [];
