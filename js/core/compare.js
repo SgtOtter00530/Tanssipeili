@@ -36,6 +36,8 @@ export function segmentAngle(lm, seg, aspect) {
   const a = point(lm, seg.from);
   const b = point(lm, seg.to);
   if (!isUsable(a) || !isUsable(b)) return null;
+  // Samaan kohtaan osuvilla päätepisteillä ei ole suuntaa.
+  if (Math.hypot((b.x - a.x) * aspect, b.y - a.y) < 1e-6) return null;
   // Normalisoidut koordinaatit ovat akselikohtaisia, joten x skaalataan kuvasuhteella.
   return (Math.atan2(b.y - a.y, (b.x - a.x) * aspect) * 180) / Math.PI;
 }
@@ -48,11 +50,12 @@ export function angleDiff(a, b) {
 
 /**
  * Segmenttikohtaiset kulmaerot. null = segmenttiä ei voitu arvioida.
+ * @param {readonly {id: string, from: any, to: any}[]} [segments] oletuksena kymmenen pääsegmenttiä
  * @returns {Record<string, number|null>}
  */
-export function compareFrames(userLm, refLm, userAspect, refAspect) {
+export function compareFrames(userLm, refLm, userAspect, refAspect, segments = SEGMENTS) {
   const out = {};
-  for (const seg of SEGMENTS) {
+  for (const seg of segments) {
     const u = segmentAngle(userLm, seg, userAspect);
     const r = segmentAngle(refLm, seg, refAspect);
     out[seg.id] = u === null || r === null ? null : angleDiff(u, r);

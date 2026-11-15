@@ -71,6 +71,14 @@ Havainnot:
 
 Havainnot:
 
+## 3b. Kämmenet ja jalkaterät
+
+Kytke tulosnäkymässä päälle Näytä kämmenet ja jalkaterät.
+
+- [ ] Osuvatko viivat kämmenten ja jalkaterien päälle?
+- [ ] Kun ojennat nilkan tai koukistat sen tarkoituksella eri tavalla kuin mallissa, näkyykö ero rivillä Jalkaterät?
+- [ ] Kuinka paljon harmaata näkyy kämmenissä ja jalkaterissä nopeassa liikkeessä?
+
 ## 4. Onko palaute hyödyllistä
 
 Tämä on vaiheen 1 tärkein kysymys.

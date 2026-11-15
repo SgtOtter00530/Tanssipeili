@@ -6,7 +6,7 @@ const DEFAULT_ANGLES = {
   lUpperArm: 90, lForearm: 90, rUpperArm: 90, rForearm: 90,
   lThigh: 90, lShin: 90, rThigh: 90, rShin: 90,
 };
-const LEN = { torso: 0.25, head: 0.1, upperArm: 0.13, forearm: 0.12, thigh: 0.2, shin: 0.2 };
+const LEN = { torso: 0.25, head: 0.1, upperArm: 0.13, forearm: 0.12, thigh: 0.2, shin: 0.2, hand: 0.04, foot: 0.05 };
 
 /**
  * Rakentaa 33 pisteen asennon segmenttikulmista (asteina, y kasvaa alaspäin, 90 = suoraan alas).
@@ -16,6 +16,11 @@ const LEN = { torso: 0.25, head: 0.1, upperArm: 0.13, forearm: 0.12, thigh: 0.2,
  */
 export function poseFromAngles(angles = {}, opts = {}) {
   const a = { ...DEFAULT_ANGLES, ...angles };
+  // Kämmen jatkaa oletuksena kyynärvarren linjaa; jalkaterä osoittaa viistosti alas ja ulos.
+  if (a.lHand === undefined) a.lHand = a.lForearm;
+  if (a.rHand === undefined) a.rHand = a.rForearm;
+  if (a.lFoot === undefined) a.lFoot = 45;
+  if (a.rFoot === undefined) a.rFoot = 135;
   const v = opts.v ?? 1;
   const aspect = opts.aspect ?? 9 / 16;
   // Lasketaan yksiköissä, joissa kuvan korkeus on 1 ja leveys = aspect.
@@ -40,7 +45,14 @@ export function poseFromAngles(angles = {}, opts = {}) {
   pts[LM.L_ANKLE] = step(pts[LM.L_KNEE], a.lShin, LEN.shin);
   pts[LM.R_KNEE] = step(pts[LM.R_HIP], a.rThigh, LEN.thigh);
   pts[LM.R_ANKLE] = step(pts[LM.R_KNEE], a.rShin, LEN.shin);
-  // Loput pisteet (kasvot, kädet, jalkaterät) lähimmän päänivelen kohdalle.
+  // Kämmenet: rystyset ranteesta kämmenen suuntaan. Jalkaterät: varpaat nilkasta, kantapää hieman nilkan alla.
+  for (const i of [17, 19, 21]) pts[i] = step(pts[LM.L_WRIST], a.lHand, LEN.hand);
+  for (const i of [18, 20, 22]) pts[i] = step(pts[LM.R_WRIST], a.rHand, LEN.hand);
+  pts[31] = step(pts[LM.L_ANKLE], a.lFoot, LEN.foot);
+  pts[32] = step(pts[LM.R_ANKLE], a.rFoot, LEN.foot);
+  pts[29] = step(pts[LM.L_ANKLE], 90, 0.015);
+  pts[30] = step(pts[LM.R_ANKLE], 90, 0.015);
+  // Loput pisteet (kasvot) nenän kohdalle.
   const fill = (from, to, src) => {
     for (let i = from; i <= to; i++) if (!pts[i]) pts[i] = { ...pts[typeof src === 'function' ? src(i) : src] };
   };
@@ -76,7 +88,7 @@ export function offsetSweep(n, deltas, fps = 10) {
   const frames = [];
   for (let i = 0; i < n; i++) {
     const deg = 90 - (180 * i) / (n - 1);
-    const base = { lUpperArm: deg, lForearm: deg, rUpperArm: 90, rForearm: 90 };
+    const base = { lUpperArm: deg, lForearm: deg, rUpperArm: 90, rForearm: 90, lFoot: 45, rFoot: 135 };
     const angles = {};
     for (const k of Object.keys(base)) angles[k] = base[k] + (deltas[k] || 0);
     frames.push({ t: i / fps, lm: poseFromAngles(angles) });

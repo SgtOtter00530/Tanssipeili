@@ -17,6 +17,9 @@ export const LM = Object.freeze({
   L_HIP: 23, R_HIP: 24,
   L_KNEE: 25, R_KNEE: 26,
   L_ANKLE: 27, R_ANKLE: 28,
+  L_INDEX: 19, R_INDEX: 20,
+  L_HEEL: 29, R_HEEL: 30,
+  L_FOOT_INDEX: 31, R_FOOT_INDEX: 32,
 });
 
 /** Vertailtavat segmentit. Suunta kulkee pisteestä `from` pisteeseen `to`. */
@@ -31,6 +34,24 @@ export const SEGMENTS = Object.freeze([
   { id: 'rShin', from: LM.R_KNEE, to: LM.R_ANKLE, group: 'legs' },
   { id: 'torso', from: 'hipCenter', to: 'shoulderCenter', group: 'core' },
   { id: 'head', from: 'shoulderCenter', to: LM.NOSE, group: 'core' },
+]);
+
+/**
+ * Kämmenet (ranne → etusormen rystynen) ja jalkaterät (nilkka → varpaiden kärki).
+ * Näytetään ja vertaillaan vain käyttäjän valitessa. Ne arvioidaan omina ryhminään,
+ * koska pienet kehonosat tunnistuvat epävarmemmin kuin isot nivelet.
+ */
+export const DETAIL_SEGMENTS = Object.freeze([
+  { id: 'lHand', from: LM.L_WRIST, to: LM.L_INDEX, group: 'hands' },
+  { id: 'rHand', from: LM.R_WRIST, to: LM.R_INDEX, group: 'hands' },
+  { id: 'lFoot', from: LM.L_ANKLE, to: LM.L_FOOT_INDEX, group: 'feet' },
+  { id: 'rFoot', from: LM.R_ANKLE, to: LM.R_FOOT_INDEX, group: 'feet' },
+]);
+
+/** Kantapään ja varpaiden välinen viiva: piirretään jalkaterän muodon vuoksi, ei vertailla. */
+export const DRAW_DETAIL = Object.freeze([
+  { id: 'lSole', from: LM.L_HEEL, to: LM.L_FOOT_INDEX },
+  { id: 'rSole', from: LM.R_HEEL, to: LM.R_FOOT_INDEX },
 ]);
 
 /** Vain piirrettävät viivat: hartialinja ja lantiolinja. Näitä ei vertailla. */

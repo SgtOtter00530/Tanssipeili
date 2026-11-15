@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LM, SEGMENTS } from '../../js/core/skeleton.js';
+import { LM, SEGMENTS, DETAIL_SEGMENTS } from '../../js/core/skeleton.js';
 import {
   MIN_VIS, THRESHOLDS, segmentAngle, angleDiff, compareFrames, levelOf, frameCost,
 } from '../../js/core/compare.js';
@@ -91,4 +91,21 @@ test('kuvan ulkopuolelle arvattu piste tekee segmentistä tuntemattoman', () => 
   // aivan reunalla oleva piste kelpaa
   const edge = pose.map((p, i) => (i === LM.L_ANKLE ? { x: p.x, y: 1.0, v: 0.9 } : p));
   assert.notEqual(compareFrames(edge, pose, 1, 1).lShin, null);
+});
+
+test('vertailun voi tehdä myös kämmenille ja jalkaterille', () => {
+  const a = poseFromAngles({});
+  const b = poseFromAngles({ lFoot: 105, rHand: 30 });
+  const d = compareFrames(a, b, 9 / 16, 9 / 16, [...SEGMENTS, ...DETAIL_SEGMENTS]);
+  assert.equal(Object.keys(d).length, 14);
+  assert.ok(Math.abs(d.lFoot - 60) < 1e-6);
+  assert.ok(Math.abs(d.rHand - 60) < 1e-6);
+  assert.ok(d.rFoot < 1e-6);
+  assert.equal(Object.keys(compareFrames(a, b, 1, 1)).length, 10, 'oletuksena vain pääsegmentit');
+});
+
+test('nollan pituinen segmentti on tuntematon', () => {
+  const pose = poseFromAngles({});
+  const collapsed = pose.map((p, i) => (i === 19 ? { ...pose[LM.L_WRIST] } : p));
+  assert.equal(segmentAngle(collapsed, DETAIL_SEGMENTS[0], 9 / 16), null);
 });

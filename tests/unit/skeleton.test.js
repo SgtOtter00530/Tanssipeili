@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { LM, SEGMENTS, DRAW_EXTRA, point, mirrorLandmarks } from '../../js/core/skeleton.js';
+import { LM, SEGMENTS, DETAIL_SEGMENTS, DRAW_DETAIL, DRAW_EXTRA, point, mirrorLandmarks } from '../../js/core/skeleton.js';
 import { poseFromAngles, approx } from './helpers.js';
 
 test('segmenttejä on kymmenen ja jokaisella on ryhmä', () => {
@@ -45,4 +45,22 @@ test('peilaus ei muuta alkuperäistä taulukkoa', () => {
   const x = pose[LM.L_WRIST].x;
   mirrorLandmarks(pose);
   assert.equal(pose[LM.L_WRIST].x, x);
+});
+
+test('kämmenille ja jalkaterille on neljä omaa segmenttiä omissa ryhmissään', () => {
+  assert.deepEqual(DETAIL_SEGMENTS.map((s) => [s.id, s.from, s.to, s.group]), [
+    ['lHand', 15, 19, 'hands'], ['rHand', 16, 20, 'hands'],
+    ['lFoot', 27, 31, 'feet'], ['rFoot', 28, 32, 'feet'],
+  ]);
+  assert.equal(LM.L_INDEX, 19);
+  assert.equal(LM.R_FOOT_INDEX, 32);
+  assert.deepEqual(DRAW_DETAIL.map((s) => [s.from, s.to]), [[29, 31], [30, 32]]);
+  assert.equal(SEGMENTS.length, 10, 'pääsegmentit eivät muutu');
+});
+
+test('peilaus vaihtaa myös rystyset ja varpaat', () => {
+  const pose = poseFromAngles({ lHand: 0, lFoot: 10 });
+  const m = mirrorLandmarks(pose);
+  assert.equal(m[LM.R_INDEX].x, 1 - pose[LM.L_INDEX].x);
+  assert.equal(m[LM.R_FOOT_INDEX].y, pose[LM.L_FOOT_INDEX].y);
 });

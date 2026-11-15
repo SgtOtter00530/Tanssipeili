@@ -113,6 +113,23 @@ await runTests('analyze', {
       });
       await page.getByLabel('Tarkkuus').selectOption('normaali');
 
+      // kämmenet ja jalkaterät: valinta tuo kaksi omaa riviä, muistetaan, eikä muuta muita rivejä
+      const detail = page.getByLabel('Näytä kämmenet ja jalkaterät');
+      assert.equal(await detail.isChecked(), false, 'oletuksena pois päältä');
+      await detail.check();
+      assert.equal(await page.locator('.summary-row').count(), 6);
+      assert.match(await rowText(page, 'Kämmenet'), /lähellä mallia|eroja|ei pystytty arvioimaan/);
+      assert.match(await rowText(page, 'Jalkaterät'), /lähellä mallia|eroja|ei pystytty arvioimaan/);
+      assert.equal(await rowText(page, 'Kädet'), '●●●● lähellä mallia');
+      assert.equal(await rowText(page, 'Jalat'), '●●●● lähellä mallia');
+      assert.equal(await page.locator('progress').count(), 0, 'videota ei käsitellä uudelleen');
+      await page.waitForFunction(async () => {
+        const { openStore } = await import('/js/store/db.js');
+        return (await (await openStore()).getSettings()).detail === true;
+      });
+      await detail.uncheck();
+      assert.equal(await page.locator('.summary-row').count(), 4);
+
       // näkymästä poistuminen ei hävitä tulosta
       await page.locator('nav.tabbar a', { hasText: 'Asetukset' }).click();
       await visible(page, COPY.privacy);

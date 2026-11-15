@@ -13,6 +13,7 @@ import { mountStage } from './stage.js';
 import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, videoAccept, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
 
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
+const DETAIL_GROUP_NAMES = [['hands', 'Kämmenet'], ['feet', 'Jalkaterät']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
 const TIMELINE_FULL_DEG = 60;
 const STRICTNESS_OPTIONS = [['salliva', 'Salliva'], ['normaali', 'Normaali'], ['tarkka', 'Tarkka']];
@@ -168,11 +169,13 @@ export async function render(root, ctx) {
     } catch { /* asetusten luku epäonnistui: käytetään oletustarkkuutta */ }
     if (disposed) return;
     let strictness = settings.strictness || 'normaali';
-    let result = analyze(track, ref.track, strictness);
+    let detail = settings.detail === true; // kämmenet ja jalkaterät mukaan
+    let result = analyze(track, ref.track, strictness, { detail });
     diag.log('analyysi', {
       kuvia: track.frames.length, 'mallin-kuvia': ref.track.frames.length,
       'tunnistettu-osuus': result.detectedShare.toFixed(2), siirtymä: result.timing.shiftSec.toFixed(1),
       kädet: result.groups.arms.dots, jalat: result.groups.legs.dots, vartalo: result.groups.core.dots,
+      kämmenet: result.groups.hands?.dots, jalkaterät: result.groups.feet?.dots,
     });
 
     if (result.detectedShare < MIN_DETECTED_SHARE) {
@@ -214,17 +217,27 @@ export async function render(root, ctx) {
         playhead);
       setChildren(summary,
         ...GROUP_NAMES.map(([key, name]) => summaryRow(name, result.groups[key].label, result.groups[key].dots)),
+        ...(detail ? DETAIL_GROUP_NAMES.map(([key, name]) => summaryRow(name, result.groups[key].label, result.groups[key].dots)) : []),
         summaryRow('Ajoitus', result.timing.label, null));
       stage?.redraw();
     }
 
     const strictnessSelect = h('select', { id: 'result-strictness', class: 'input' },
       ...STRICTNESS_OPTIONS.map(([value, label]) => h('option', { value, selected: value === strictness }, label)));
+    const recompute = () => {
+      result = analyze(track, ref.track, strictness, { detail });
+      renderResult();
+      settings = { ...settings, strictness, detail };
+      store.saveSettings(settings).catch(() => {});
+    };
     strictnessSelect.addEventListener('change', () => {
       strictness = strictnessSelect.value;
-      result = analyze(track, ref.track, strictness);
-      renderResult();
-      store.saveSettings({ ...settings, strictness }).catch(() => {});
+      recompute();
+    });
+    const showDetail = h('input', { type: 'checkbox', id: 'show-detail', checked: detail });
+    showDetail.addEventListener('change', () => {
+      detail = showDetail.checked;
+      recompute();
     });
 
     setChildren(body,
@@ -232,6 +245,10 @@ export async function render(root, ctx) {
       result.detectedShare < PARTLY_DETECTED_SHARE ? h('p', { class: 'notice', text: COPY.partlyDetected }) : null,
       holder,
       h('label', { class: 'option', for: 'show-ref' }, showRef, h('span', { class: 'option-text' }, h('span', { class: 'option-label', text: 'Näytä malli' }))),
+      h('label', { class: 'option', for: 'show-detail' }, showDetail,
+        h('span', { class: 'option-text' },
+          h('span', { class: 'option-label', text: 'Näytä kämmenet ja jalkaterät' }),
+          h('span', { class: 'option-hint', text: 'Ojennuksia varten. Pienet kehonosat tunnistuvat epävarmemmin, joten harmaata voi näkyä enemmän.' }))),
       h('h2', { text: 'Missä kohdissa erosit mallista' }),
       h('p', { class: 'hint', text: 'Korkea palkki tarkoittaa, että jokin raaja oli sillä hetkellä kaukana mallista. Napauta palkkia siirtyäksesi kohtaan.' }),
       h('div', { class: 'timeline-wrap' }, timeline),
@@ -265,9 +282,9 @@ export async function render(root, ctx) {
           const refFrame = result.map[i] >= 0 ? ref.track.frames[result.map[i]] : null;
           if (showRef.checked && refFrame && refFrame.lm) {
             const projected = projectReference(refFrame.lm, refAspect, frame.lm, userAspect);
-            if (projected) drawSkeleton(ctx2d, projected, { width, height, variant: 'ghost' });
+            if (projected) drawSkeleton(ctx2d, projected, { width, height, variant: 'ghost', detail });
           }
-          drawSkeleton(ctx2d, frame.lm, { width, height, variant: 'user', levels: result.perFrame[i].levels });
+          drawSkeleton(ctx2d, frame.lm, { width, height, variant: 'user', levels: result.perFrame[i].levels, detail });
         },
       });
     } catch (e) {

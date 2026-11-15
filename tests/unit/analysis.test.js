@@ -134,3 +134,41 @@ test('radan peilaus peilaa jokaisen kuvan ja säilyttää tyhjät', () => {
   assert.equal(m.frames.length, t.frames.length);
   assert.equal(m.width, t.width);
 });
+
+test('ilman kämmen- ja jalkaterävalintaa tulos on ennallaan', () => {
+  const user = offsetSweep(40, { lFoot: 60 });
+  const a = analyze(user, ref, 'normaali');
+  assert.equal(Object.keys(a.perFrame[20].levels).length, 10);
+  assert.equal(a.groups.hands, null);
+  assert.equal(a.groups.feet, null);
+  assert.ok(a.timeline[20] < 1, 'jalkaterän ero ei näy aikajanalla ilman valintaa');
+  assert.equal(a.groups.legs.dots, 4);
+});
+
+test('valinnalla väärässä asennossa oleva jalkaterä näkyy omalla rivillään eikä heikennä Jalat-riviä', () => {
+  const user = offsetSweep(40, { lFoot: 60 });
+  const a = analyze(user, ref, 'normaali', { detail: true });
+  assert.equal(Object.keys(a.perFrame[20].levels).length, 14);
+  assert.equal(a.perFrame[20].levels.lFoot, 'red');
+  assert.equal(a.perFrame[20].levels.rFoot, 'green');
+  assert.deepEqual(a.groups.feet, { dots: 1, label: 'paljon eroja' });
+  assert.deepEqual(a.groups.hands, { dots: 4, label: 'lähellä mallia' });
+  assert.equal(a.groups.legs.dots, 4);
+  assert.equal(a.groups.arms.dots, 4);
+  assert.ok(a.timeline[20] > 55, `aikajana näyttää jalkaterän eron: ${a.timeline[20]}`);
+});
+
+test('kämmenet ja jalkaterät eivät vaikuta ajalliseen kohdistukseen', () => {
+  const user = padStart(offsetSweep(40, { lFoot: 80, rHand: 80 }), 5);
+  const plain = analyze(user, ref, 'normaali');
+  const detailed = analyze(user, ref, 'normaali', { detail: true });
+  assert.deepEqual([...detailed.map], [...plain.map]);
+  assert.equal(detailed.timing.shiftSec, plain.timing.shiftSec);
+});
+
+test('piilossa olevat jalkaterät: rivi kertoo, ettei arviota voitu tehdä', () => {
+  const hidden = { ...ref, frames: ref.frames.map((f) => ({ t: f.t, lm: f.lm.map((p, i) => ([31, 32].includes(i) ? { ...p, v: 0 } : p)) })) };
+  const a = analyze(hidden, ref, 'normaali', { detail: true });
+  assert.deepEqual(a.groups.feet, { dots: 0, label: 'ei pystytty arvioimaan' });
+  assert.equal(a.groups.hands.dots, 4);
+});

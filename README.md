@@ -24,6 +24,7 @@ Asetuksissa on vianmäärityksen loki. Sekin pysyy laitteessa: käyttäjä kopio
   - Kehonosan arvion ratkaisee sen heikoin raaja, ja aikajana näyttää kunkin hetken suurimman eron.
   - Ajoitus kertoo vain, muuttuiko tahti pätkän aikana.
 - **Tarkkuusasetus.** Salliva, normaali tai tarkka.
+- **Kämmenet ja jalkaterät.** Tulosnäkymän valinnalla tikku-ukkoon saa mukaan kämmenen suunnan (ranne → rystyset) ja jalkaterän (nilkka → varpaat) ojennusten tarkastelua varten. Ne arvioidaan omilla riveillään. Yksittäisiä sormia ei tunnisteta.
 
 Reaaliaikainen kameratila, lisääminen kotinäytölle ja kirjaston varmuuskopiointi kuuluvat seuraaviin vaiheisiin. Tanssilajin automaattinen tunnistus ei ole mukana.
 

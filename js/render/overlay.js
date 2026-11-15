@@ -1,5 +1,5 @@
 // Tikku-ukon piirto canvasiin videon tai kamerakuvan päälle.
-import { SEGMENTS, DRAW_EXTRA, LM, point } from '../core/skeleton.js';
+import { SEGMENTS, DETAIL_SEGMENTS, DRAW_EXTRA, DRAW_DETAIL, LM, point } from '../core/skeleton.js';
 import { isUsable } from '../core/compare.js';
 
 export const COLORS = Object.freeze({
@@ -16,6 +16,7 @@ const OUTLINE = 'rgba(0,0,0,0.4)';
 const WIDTH_FACTOR = { green: 1, yellow: 1.3, red: 1.6, unknown: 1 };
 const SEVERITY = { green: 1, yellow: 2, red: 3 };
 const GHOST_WIDTH = 3;
+const DETAIL_SCALE = 0.8;
 
 const JOINTS = [
   LM.NOSE, LM.L_SHOULDER, LM.R_SHOULDER, LM.L_ELBOW, LM.R_ELBOW, LM.L_WRIST, LM.R_WRIST,
@@ -43,7 +44,7 @@ function disc(ctx, p, r, color) {
 /**
  * @param {CanvasRenderingContext2D} ctx
  * @param {import('../core/skeleton.js').Landmark[]} lm
- * @param {{width: number, height: number, levels?: Record<string, import('../core/skeleton.js').Level>|null, variant: 'user'|'ghost'}} opts
+ * @param {{width: number, height: number, levels?: Record<string, import('../core/skeleton.js').Level>|null, variant: 'user'|'ghost', detail?: boolean}} opts
  */
 export function drawSkeleton(ctx, lm, opts) {
   const { width, height, variant } = opts;
@@ -53,30 +54,35 @@ export function drawSkeleton(ctx, lm, opts) {
   const ghost = variant === 'ghost';
   ctx.save();
 
-  const drawSegment = (seg, level) => {
+  const drawSegment = (seg, level, scale = 1) => {
     const a = toPx(point(lm, seg.from));
     const b = toPx(point(lm, seg.to));
     const visible = isUsable(point(lm, seg.from)) && isUsable(point(lm, seg.to));
     if (ghost) {
       // Malli piirretään leveänä nauhana, jotta se näkyy oman ukon takaa silloinkin, kun asennot osuvat kohdakkain.
-      if (visible) line(ctx, a, b, COLORS.ghost, base * GHOST_WIDTH, false);
+      if (visible) line(ctx, a, b, COLORS.ghost, base * GHOST_WIDTH * scale, false);
       return;
     }
     // Oma ukko: epävarma tai arvioimaton segmentti on aina harmaa katkoviiva.
     const effective = !visible ? 'unknown' : level;
     if (effective === 'unknown') {
       ctx.setLineDash([base * 2, base * 2]);
-      line(ctx, a, b, COLORS.unknown, base, true);
+      line(ctx, a, b, COLORS.unknown, base * scale, true);
       ctx.setLineDash([]);
       return;
     }
-    const w = base * (effective ? WIDTH_FACTOR[effective] : 1);
+    const w = base * (effective ? WIDTH_FACTOR[effective] : 1) * scale;
     line(ctx, a, b, OUTLINE, w + 3, false);
     line(ctx, a, b, effective ? COLORS[effective] : NEUTRAL, w, false);
   };
 
   for (const seg of DRAW_EXTRA) drawSegment(seg, null);
   for (const seg of SEGMENTS) drawSegment(seg, levels ? levels[seg.id] || 'unknown' : null);
+  // Kämmenet ja jalkaterät piirretään vain pyydettäessä, hieman ohuempina kuin raajat.
+  if (opts.detail) {
+    for (const seg of DRAW_DETAIL) drawSegment(seg, null, DETAIL_SCALE * 0.8);
+    for (const seg of DETAIL_SEGMENTS) drawSegment(seg, levels ? levels[seg.id] || 'unknown' : null, DETAIL_SCALE);
+  }
 
   for (const j of JOINTS) {
     const p = toPx(lm[j]);
@@ -101,6 +107,16 @@ export function drawSkeleton(ctx, lm, opts) {
       ctx.strokeStyle = COLORS.red;
       ctx.lineWidth = Math.max(1.5, base * 0.5);
       ctx.stroke();
+    }
+  }
+  if (opts.detail && !ghost) {
+    // Rystysen ja varpaiden kärjen pallot saavat oman segmenttinsä tason.
+    for (const seg of DETAIL_SEGMENTS) {
+      const p = toPx(lm[seg.to]);
+      const level = !isUsable(lm[seg.to]) ? 'unknown' : levels ? levels[seg.id] || 'unknown' : null;
+      const r = base * 0.9;
+      if (level !== 'unknown') disc(ctx, p, r + 1.5, OUTLINE);
+      disc(ctx, p, r, level ? COLORS[level] : NEUTRAL);
     }
   }
   ctx.restore();

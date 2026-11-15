@@ -110,6 +110,43 @@ await runTests('overlay', {
       assert.ok(r.hiddenUpperPixels > 500);
     }),
 
+  'kämmenet ja jalkaterät piirtyvät vain pyydettäessä, omilla väreillään': () =>
+    withPage(async ({ page, url }) => {
+      await page.goto(`${url}/tests/e2e/blank.html`);
+      const r = await run(page, `
+        const levels = { ...allLevels('green'), lHand: 'green', rHand: 'yellow', lFoot: 'red', rFoot: 'green' };
+        const foot = mid(pose, LM.L_ANKLE, LM.L_FOOT_INDEX), hand = mid(pose, LM.R_WRIST, LM.R_INDEX);
+        const sole = mid(pose, LM.L_HEEL, LM.L_FOOT_INDEX);
+        const off = make();
+        drawSkeleton(off, pose, { width: W, height: H, variant: 'user', levels });
+        const on = make();
+        drawSkeleton(on, pose, { width: W, height: H, variant: 'user', levels, detail: true });
+        const ghostOff = make();
+        drawSkeleton(ghostOff, pose, { width: W, height: H, variant: 'ghost' });
+        const ghostOn = make();
+        drawSkeleton(ghostOn, pose, { width: W, height: H, variant: 'ghost', detail: true });
+        const hidden = make();
+        const noToes = poseFromAngles({}, { hidden: [LM.L_FOOT_INDEX] });
+        drawSkeleton(hidden, noToes, { width: W, height: H, variant: 'user', levels, detail: true });
+        const toe = at(pose, LM.L_FOOT_INDEX);
+        return {
+          footOff: px(off, foot.x, foot.y), footOn: px(on, foot.x, foot.y), handOn: px(on, hand.x, hand.y), toeOn: px(on, toe.x, toe.y),
+          soleOn: px(on, sole.x, sole.y)[3], soleOff: px(off, sole.x, sole.y)[3],
+          ghostFootOff: px(ghostOff, foot.x, foot.y)[3], ghostFootOn: px(ghostOn, foot.x, foot.y),
+          hiddenFoot: px(hidden, foot.x, foot.y),
+        };
+      `);
+      assert.equal(r.footOff[3], 0, 'ilman valintaa jalkaterää ei piirretä');
+      assert.equal(r.soleOff, 0);
+      assert.ok(isClose(r.footOn, [231, 76, 60]), `jalkaterä punainen: ${r.footOn}`);
+      assert.ok(isClose(r.handOn, [241, 196, 15]), `kämmen keltainen: ${r.handOn}`);
+      assert.ok(isClose(r.toeOn, [231, 76, 60]), `varpaiden kärjen pallo: ${r.toeOn}`);
+      assert.ok(r.soleOn > 0, 'kantapään ja varpaiden välinen viiva piirtyy');
+      assert.equal(r.ghostFootOff, 0);
+      assert.ok(Math.abs(r.ghostFootOn[2] - 255) <= 6 && r.ghostFootOn[3] > 150, `mallin jalkaterä: ${r.ghostFootOn}`);
+      assert.ok(!isClose(r.hiddenFoot, [231, 76, 60], 40), `näkymätön varvas ei ole punainen: ${r.hiddenFoot}`);
+    }),
+
   'viivan leveys skaalautuu kuvan koon mukaan': () =>
     withPage(async ({ page, url }) => {
       await page.goto(`${url}/tests/e2e/blank.html`);

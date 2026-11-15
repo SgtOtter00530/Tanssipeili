@@ -20,6 +20,9 @@ Päiväys: 15.11.2026
 
 11. **Androidissa videon valinta ohittaa järjestelmän kuvavalitsimen** (lisätty toisen puhelintestin lokin perusteella). Loki osoitti, että Chrome sai valitun tiedoston luettua vain hetken valinnan jälkeen, joskus alle 0,1 sekuntia (`NotReadableError`). Tiedostojen nimet olivat pelkkiä numeroita, mikä viittaa Androidin kuvavalitsimen välitystiedostoon; sama vika on kuvattu Chromiumin virheraportissa 40123366 ja useissa muissa projekteissa. Tiedostokentän hyväksyttyihin tyyppeihin lisättiin yksi keksitty tyyppi, jolloin Chrome avaa tavallisen tiedostovalinnan. Lisäksi epäonnistunut luku yritetään kolme kertaa uudelleen, ja lukuvirheen jälkeen tarjotaan valinta tiedostoselaimesta. Jos väärin: valinta näyttää Androidissa erilaiselta kuin ennen eikä vika silti poistu; silloin loki kertoo, mitä valitsinta käytettiin ja missä kohdassa luku katkesi.
 
+    Todennettu käyttäjän puhelimella 15.11.2026 (Xiaomi, Chrome 157): versiolla 2026-11-15.5 videot aukesivat ja analyysi toimi.
+12. **Kämmenet ja jalkaterät valinnaisena** (käyttäjän toive ensimmäisen onnistuneen puhelintestin jälkeen). Katso `docs/superpowers/specs/2026-11-15-kammenet-jalkaterat.md`. Arvioidaan omilla riveillään eivätkä vaikuta ajalliseen kohdistukseen. Jos väärin: rivit Kämmenet ja Jalkaterät ovat usein harmaita tai epäluotettavia nopeassa liikkeessä; valinta on oletuksena pois päältä.
+
 ## 2. Varmentamatta jääneet korjaukset
 
 Nämä tehtiin tarkastuksen perusteella, mutta niitä ei voitu todentaa tietokoneen selaimella.
