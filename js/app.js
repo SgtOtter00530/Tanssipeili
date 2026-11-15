@@ -7,6 +7,7 @@ import { COPY } from './ui/copy.js';
 
 const ROUTES = {
   kirjasto: { tab: 'kirjasto', load: () => import('./ui/library.js') },
+  'lisaa-malli': { tab: 'kirjasto', load: () => import('./ui/add-reference.js') },
   asetukset: { tab: 'asetukset', load: () => import('./ui/settings.js') },
 };
 const DEFAULT_ROUTE = 'kirjasto';

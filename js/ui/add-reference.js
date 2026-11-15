@@ -1,0 +1,234 @@
+// Mallin lisäys: videon valinta, rajaus, käsittely, esikatselu ja tallennus.
+import { extractTrack, ExtractError, MAX_CLIP_SECONDS } from '../pose/extract.js';
+import { mirrorTrack } from '../core/track.js';
+import { mirrorLandmarks } from '../core/skeleton.js';
+import { drawSkeleton } from '../render/overlay.js';
+import { StoreFullError } from '../store/db.js';
+import { COPY } from './copy.js';
+import { h, newId } from './dom.js';
+import { mountTrim } from './trim.js';
+import { mountStage } from './stage.js';
+
+/** Tätä pienemmällä tunnistusosuudella videota ei hyväksytä malliksi. */
+export const MIN_DETECTED_SHARE = 0.3;
+
+export function errorText(e) {
+  if (e instanceof ExtractError) {
+    if (e.code === 'unsupported') return COPY.unsupported;
+    if (e.code === 'too-long') return COPY.tooLong;
+  }
+  if (e instanceof StoreFullError) return COPY.storeFull;
+  return COPY.genericError;
+}
+
+/** Käsittelyvaiheen näkymä: etenemispalkki ja peruutus. Palauttaa liikeradan tai null, jos käyttäjä perui. */
+export async function runExtraction(body, ctx, file, range, signalHolder) {
+  const controller = new AbortController();
+  signalHolder.abort = () => controller.abort();
+  const progress = h('progress', { 'aria-label': 'Käsittelyn eteneminen' });
+  const status = h('p', { class: 'hint', role: 'status', text: 'Käynnistetään tunnistusta…' });
+  body.replaceChildren(
+    h('h2', { text: 'Käsitellään videota' }),
+    progress,
+    status,
+    h('p', { class: 'hint', text: 'Pidä tämä sivu auki. Käsittely tapahtuu puhelimessasi ja voi kestää hetken.' }),
+    h('button', { type: 'button', class: 'btn btn-block', onClick: () => controller.abort() }, 'Peruuta'),
+  );
+  try {
+    let engine;
+    try {
+      engine = await ctx.getEngine();
+    } catch {
+      throw new Error(COPY.engineFailed);
+    }
+    return await extractTrack(file, engine, {
+      start: range.start,
+      end: range.end,
+      signal: controller.signal,
+      onProgress(done, total) {
+        progress.max = total;
+        progress.value = done;
+        status.textContent = `Käsitelty ${done} / ${total} kuvaa`;
+      },
+    });
+  } catch (e) {
+    if (e instanceof ExtractError && e.code === 'aborted') return null;
+    throw e;
+  } finally {
+    signalHolder.abort = null;
+  }
+}
+
+/** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
+export async function render(root, ctx) {
+  const styles = await ctx.store.listStyles();
+  const defaultStyle = ctx.params.styleId || ctx.state.styleId;
+  const body = h('div', {});
+  const errorBox = h('p', { class: 'notice notice-error', role: 'alert', hidden: true });
+  root.append(h('h1', { tabindex: '-1', text: 'Lisää malli' }), errorBox, body);
+
+  let trim = null;
+  let stage = null;
+  const running = { abort: null };
+  let disposed = false;
+
+  const showError = (text) => {
+    errorBox.textContent = text;
+    errorBox.hidden = !text;
+  };
+  const dispose = () => {
+    trim?.destroy();
+    trim = null;
+    stage?.destroy();
+    stage = null;
+  };
+
+  function stepPick() {
+    dispose();
+    const input = h('input', { type: 'file', id: 'ref-file', accept: 'video/*', class: 'visually-hidden' });
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (file) stepTrim(file, null);
+    });
+    body.replaceChildren(
+      h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
+      h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
+      h('p', { class: 'hint', text: COPY.privacy }),
+    );
+  }
+
+  async function stepTrim(file, initial) {
+    dispose();
+    const holder = h('div', {});
+    try {
+      trim = await mountTrim(holder, file, { maxSeconds: MAX_CLIP_SECONDS, initial: initial || undefined });
+    } catch (e) {
+      if (disposed) return;
+      stepPick();
+      showError(errorText(e));
+      return;
+    }
+    if (disposed) return void dispose();
+    showError('');
+    body.replaceChildren(
+      h('h2', { text: 'Rajaa mallin pätkä' }),
+      h('p', { class: 'hint', text: 'Valitse kohta, jossa tanssi alkaa ja loppuu.' }),
+      holder,
+      h('button', { type: 'button', class: 'btn btn-primary btn-block', onClick: () => stepProcess(file, trim.getRange()) }, 'Jatka'),
+      h('button', { type: 'button', class: 'btn btn-block', onClick: stepPick }, 'Vaihda video'),
+    );
+  }
+
+  async function stepProcess(file, range) {
+    dispose();
+    showError('');
+    let track;
+    try {
+      track = await runExtraction(body, ctx, file, range, running);
+    } catch (e) {
+      if (disposed) return;
+      await stepTrim(file, range);
+      showError(e instanceof ExtractError ? errorText(e) : e.message || COPY.genericError);
+      return;
+    }
+    if (disposed) return;
+    if (!track) return void stepTrim(file, range);
+    await stepPreview(file, range, track);
+  }
+
+  async function stepPreview(file, range, track) {
+    dispose();
+    const detected = track.frames.filter((f) => f.lm).length;
+    const usable = track.frames.length > 0 && detected / track.frames.length >= MIN_DETECTED_SHARE;
+    let mirrored = false;
+
+    const holder = h('div', {});
+    const nameInput = h('input', { type: 'text', id: 'ref-name', class: 'input', maxlength: 40, autocomplete: 'off', value: (file.name || 'Malli').replace(/\.[^.]+$/, '') });
+    const styleSelect = h('select', { id: 'ref-style', class: 'input' },
+      ...styles.map((s) => h('option', { value: s.id, selected: s.id === defaultStyle }, s.name)));
+    const mirrorBox = h('input', { type: 'checkbox', id: 'ref-mirror' });
+    const keepBox = h('input', { type: 'checkbox', id: 'ref-keep', checked: true });
+    const saveBtn = h('button', { type: 'button', class: 'btn btn-primary btn-block' }, 'Tallenna');
+    let saving = false;
+    const syncSave = () => {
+      saveBtn.disabled = saving || !usable || nameInput.value.trim() === '';
+    };
+    nameInput.addEventListener('input', syncSave);
+
+    body.replaceChildren(
+      h('h2', { text: 'Esikatselu' }),
+      usable ? null : h('p', { class: 'notice notice-error', text: COPY.noPerson }),
+      holder,
+      h('label', { class: 'option', for: 'ref-mirror' }, mirrorBox,
+        h('span', { class: 'option-text' },
+          h('span', { class: 'option-label', text: 'Malli on peilikuva' }),
+          h('span', { class: 'option-hint', text: 'Valitse, jos opetusvideo on kuvattu peilikuvana.' }))),
+      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'ref-name', text: 'Nimi' }), nameInput),
+      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'ref-style', text: 'Laji' }), styleSelect),
+      h('label', { class: 'option', for: 'ref-keep' }, keepBox,
+        h('span', { class: 'option-text' },
+          h('span', { class: 'option-label', text: 'Tallenna myös video puhelimeen' }),
+          h('span', { class: 'option-hint', text: COPY.keepVideoHint }))),
+      saveBtn,
+      h('button', { type: 'button', class: 'btn btn-block', onClick: () => stepTrim(file, range) }, 'Takaisin rajaukseen'),
+    );
+    syncSave();
+
+    try {
+      stage = await mountStage(holder, file, {
+        start: range.start,
+        end: range.end,
+        overlayId: 'preview-overlay',
+        draw(ctx2d, t, width, height) {
+          const frame = track.frames[Math.min(track.frames.length - 1, Math.round(t * track.fps))];
+          if (!frame || !frame.lm) return;
+          drawSkeleton(ctx2d, mirrored ? mirrorLandmarks(frame.lm) : frame.lm, { width, height, variant: 'user' });
+        },
+      });
+    } catch (e) {
+      if (!disposed) showError(errorText(e));
+    }
+    if (disposed) return void dispose();
+
+    mirrorBox.addEventListener('change', () => {
+      mirrored = mirrorBox.checked;
+      stage?.setMirrored(mirrored);
+      stage?.redraw();
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      if (saveBtn.disabled) return;
+      saving = true;
+      syncSave();
+      showError('');
+      const styleId = styleSelect.value;
+      try {
+        await ctx.store.saveReference({
+          id: newId(),
+          name: nameInput.value.trim(),
+          styleId,
+          mirrored,
+          track: mirrored ? mirrorTrack(track) : track,
+          clip: { start: range.start, end: range.end },
+          video: keepBox.checked ? file : null,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        saving = false;
+        syncSave();
+        showError(errorText(e));
+        errorBox.scrollIntoView({ block: 'center' });
+        return;
+      }
+      ctx.navigate('#kirjasto', { styleId });
+    });
+  }
+
+  stepPick();
+
+  return () => {
+    disposed = true;
+    running.abort?.();
+    dispose();
+  };
+}
