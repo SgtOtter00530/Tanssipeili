@@ -1,0 +1,130 @@
+// Videotiedostosta liikeradaksi. Video avataan vain tässä selaimessa; mitään ei lähetetä verkkoon.
+
+export const ANALYSIS_FPS = 10;
+export const MAX_CLIP_SECONDS = 120;
+
+const LOAD_TIMEOUT_MS = 10000;
+const SEEK_TIMEOUT_MS = 10000;
+
+export class ExtractError extends Error {
+  /** @param {'unsupported'|'too-long'|'aborted'} code */
+  constructor(code, message) {
+    super(message || code);
+    this.name = 'ExtractError';
+    this.code = code;
+  }
+}
+
+/** Avaa tiedoston piilotettuun videoelementtiin ja odottaa perustiedot. */
+function openVideo(file) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.setAttribute('aria-hidden', 'true');
+    video.style.cssText = 'position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none;';
+    const url = URL.createObjectURL(file);
+    const dispose = () => {
+      video.removeAttribute('src');
+      try {
+        video.load();
+      } catch { /* ei väliä */ }
+      video.remove();
+      URL.revokeObjectURL(url);
+    };
+    const fail = () => {
+      cleanup();
+      dispose();
+      reject(new ExtractError('unsupported'));
+    };
+    const ok = () => {
+      if (!(video.videoWidth > 0) || !Number.isFinite(video.duration) || !(video.duration > 0)) return fail();
+      cleanup();
+      resolve({ video, dispose });
+    };
+    const timer = setTimeout(fail, LOAD_TIMEOUT_MS);
+    const cleanup = () => {
+      clearTimeout(timer);
+      video.removeEventListener('loadedmetadata', ok);
+      video.removeEventListener('error', fail);
+    };
+    video.addEventListener('loadedmetadata', ok);
+    video.addEventListener('error', fail);
+    document.body.appendChild(video);
+    video.src = url;
+  });
+}
+
+function seekTo(video, t) {
+  return new Promise((resolve, reject) => {
+    const max = Math.max(0, video.duration - 0.001);
+    let target = Math.min(Math.max(0, t), max);
+    // Sama aika ei välttämättä laukaise seeked-tapahtumaa, joten siirretään hiuksen verran.
+    if (Math.abs(video.currentTime - target) < 1e-4) target = Math.min(target + 0.001, video.duration);
+    const done = () => {
+      cleanup();
+      resolve();
+    };
+    const fail = () => {
+      cleanup();
+      reject(new ExtractError('unsupported'));
+    };
+    const timer = setTimeout(fail, SEEK_TIMEOUT_MS);
+    const cleanup = () => {
+      clearTimeout(timer);
+      video.removeEventListener('seeked', done);
+      video.removeEventListener('error', fail);
+    };
+    video.addEventListener('seeked', done);
+    video.addEventListener('error', fail);
+    video.currentTime = target;
+  });
+}
+
+/**
+ * @param {Blob} file
+ * @returns {Promise<{duration: number, width: number, height: number}>}
+ */
+export async function probeVideo(file) {
+  const { video, dispose } = await openVideo(file);
+  try {
+    return { duration: video.duration, width: video.videoWidth, height: video.videoHeight };
+  } finally {
+    dispose();
+  }
+}
+
+/**
+ * @param {Blob} file
+ * @param {{detect(source: HTMLVideoElement): Promise<import('../core/skeleton.js').Landmark[]|null>}} engine
+ * @param {{start?: number, end?: number, fps?: number, onProgress?: (done: number, total: number) => void, signal?: AbortSignal}} [opts]
+ * @returns {Promise<import('../core/skeleton.js').Track>}
+ */
+export async function extractTrack(file, engine, opts = {}) {
+  const fps = opts.fps ?? ANALYSIS_FPS;
+  const start = Math.max(0, opts.start ?? 0);
+  const checkAbort = () => {
+    if (opts.signal?.aborted) throw new ExtractError('aborted');
+  };
+  checkAbort();
+  const { video, dispose } = await openVideo(file);
+  try {
+    const requestedEnd = opts.end ?? video.duration;
+    if (requestedEnd - start > MAX_CLIP_SECONDS + 1e-6) throw new ExtractError('too-long');
+    const end = Math.min(requestedEnd, video.duration);
+    const total = Math.max(0, Math.round((end - start) * fps));
+    const frames = [];
+    for (let i = 0; i < total; i++) {
+      checkAbort();
+      await seekTo(video, start + i / fps);
+      checkAbort();
+      const lm = await engine.detect(video);
+      frames.push({ t: i / fps, lm });
+      opts.onProgress?.(i + 1, total);
+    }
+    return { fps, width: video.videoWidth, height: video.videoHeight, frames };
+  } finally {
+    dispose();
+  }
+}
