@@ -56,7 +56,7 @@ Rakenne:
 | `js/render/` | Tikku-ukon piirto. |
 | `js/ui/` | Näkymät. |
 | `vendor/mediapipe-pose/` | MediaPipe Pose -kirjaston tiedostot. |
-| `docs/` | Suunnitelma, toteutussuunnitelma ja puhelintestin tarkistuslista. |
+| `docs/` | Suunnitelma, toteutussuunnitelma, puhelintestin tarkistuslista ja tehdyt päätökset. |
 
 ## Lisenssit
 
