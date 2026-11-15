@@ -9,6 +9,8 @@ export const COPY = Object.freeze({
   tooLong: 'Rajaa pätkä enintään 2 minuutin mittaiseksi.',
   notPersistent: 'Kirjastoa ei voitu tallentaa tähän selaimeen. Mallit säilyvät vain tämän käyttökerran ajan.',
   storeFull: 'Tallennustila ei riittänyt. Kokeile tallentaa malli ilman videota.',
+  saveFailedWithVideo: 'Tallennus ei onnistunut. Kokeile tallentaa malli ilman videota.',
+  timingHint: 'Ajoitus kertoo, muuttuiko tahtisi pätkän aikana malliin verrattuna. Videoiden alkukohdat sovitetaan yhteen automaattisesti, joten rajauksen ero ei näy virheenä.',
   privacy: 'Videot ja liikeradat pysyvät tässä puhelimessa. Sovellus ei lähetä mitään verkkoon.',
   emptyStyle: 'Tässä lajissa ei ole vielä malleja.',
   keepVideoHint: 'Tarvitaan, jotta mallin musiikki kuuluu harjoitellessa. Video pysyy puhelimessa.',

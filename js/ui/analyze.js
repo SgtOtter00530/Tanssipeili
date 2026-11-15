@@ -13,6 +13,7 @@ import { runExtraction, errorText, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } f
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
 const TIMELINE_FULL_DEG = 60;
+const STRICTNESS_OPTIONS = [['salliva', 'Salliva'], ['normaali', 'Normaali'], ['tarkka', 'Tarkka']];
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -37,7 +38,8 @@ export async function render(root, ctx) {
     stage = null;
   };
 
-  async function stepPickReference() {
+  /** @param {{file: Blob, range: {start: number, end: number}, track: any}|null} [pending] jo käsitelty oma video, jota verrataan valittavaan malliin */
+  async function stepPickReference(pending = null) {
     dispose();
     showError('');
     const [styles, refs] = await Promise.all([store.listStyles(), store.listReferences()]);
@@ -55,7 +57,7 @@ export async function render(root, ctx) {
     const renderList = () => {
       const inStyle = refs.filter((r) => r.styleId === styleId);
       setChildren(list, ...(inStyle.length
-        ? inStyle.map((r) => h('button', { type: 'button', class: 'btn btn-block pick-ref', onClick: () => stepPickVideo(r) },
+        ? inStyle.map((r) => h('button', { type: 'button', class: 'btn btn-block pick-ref', onClick: () => (pending ? stepResult(r, pending.file, pending.range, pending.track) : stepPickVideo(r)) },
           h('span', { text: r.name }),
           h('span', { class: 'meta', text: formatDuration(r.track.frames.length / r.track.fps) })))
         : [h('p', { class: 'empty', text: COPY.emptyStyle })]));
@@ -84,7 +86,7 @@ export async function render(root, ctx) {
     onFile(gallery);
     setChildren(body, h('div', { class: 'chosen-ref' },
         h('p', { text: `Malli: ${ref.name}` }),
-        h('button', { type: 'button', class: 'btn btn-quiet', onClick: stepPickReference }, 'Vaihda malli')),
+        h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => stepPickReference() }, 'Vaihda malli')),
       h('p', { class: 'notice notice-info', text: COPY.filmingGuide }),
       h('div', { class: 'file-actions' },
         h('label', { class: 'btn btn-primary btn-block file-btn' }, camera, 'Kuvaa nyt'),
@@ -133,14 +135,23 @@ export async function render(root, ctx) {
 
   async function stepResult(ref, file, range, track) {
     dispose();
+    showError('');
+    // Tulos säilytetään, jotta näkymästä poistuminen (esim. asetuksiin) ei hävitä minuuttien käsittelyä.
+    ctx.state.analysis = { ref, file, range, track };
     const again = h('button', { type: 'button', class: 'btn btn-primary btn-block', onClick: () => stepPickVideo(ref) }, 'Analysoi toinen video');
-    const change = h('button', { type: 'button', class: 'btn btn-block', onClick: stepPickReference }, 'Vaihda malli');
-    const { strictness } = await store.getSettings();
+    const change = h('button', { type: 'button', class: 'btn btn-block', onClick: () => stepPickReference({ file, range, track }) }, 'Vaihda malli');
+
+    let settings = { strictness: 'normaali' };
+    try {
+      settings = await store.getSettings();
+    } catch { /* asetusten luku epäonnistui: käytetään oletustarkkuutta */ }
     if (disposed) return;
-    const result = analyze(track, ref.track, strictness);
+    let strictness = settings.strictness || 'normaali';
+    let result = analyze(track, ref.track, strictness);
 
     if (result.detectedShare < MIN_DETECTED_SHARE) {
-      setChildren(body, h('p', { class: 'notice notice-error', text: COPY.noPerson }), again, change);
+      ctx.state.analysis = null;
+      setChildren(body, h('p', { class: 'notice notice-error', text: COPY.noPerson }), again, h('button', { type: 'button', class: 'btn btn-block', onClick: () => stepPickReference() }, 'Vaihda malli'));
       return;
     }
 
@@ -152,19 +163,12 @@ export async function render(root, ctx) {
     const holder = h('div', {});
     const showRef = h('input', { type: 'checkbox', id: 'show-ref', checked: true });
     const playhead = h('div', { class: 'timeline-playhead' });
-    const timeline = h('div', { class: 'timeline', role: 'img', 'aria-label': 'Aikajana: korkea palkki tarkoittaa suurta eroa malliin. Napauta siirtyäksesi kohtaan.' },
-      ...result.timeline.map((mean, i) => {
-        const fill = h('div', { class: 'timeline-fill' });
-        fill.style.height = `${mean === null ? 8 : 8 + Math.min(1, mean / TIMELINE_FULL_DEG) * 92}%`;
-        fill.style.background = COLORS[levelOf(mean, strictness)];
-        return h('div', { class: 'timeline-bar', 'data-index': i }, fill);
-      }),
-      playhead,
-    );
+    const timeline = h('div', { class: 'timeline', 'aria-hidden': 'true' });
     timeline.addEventListener('click', (e) => {
       const bar = e.target.closest('.timeline-bar');
       if (bar && stage) stage.seek(Number(bar.dataset.index) / track.fps);
     });
+    const summary = h('div', { class: 'summary' });
 
     const summaryRow = (name, value, dots) => h('div', { class: 'summary-row' },
       h('span', { class: 'summary-name', text: name }),
@@ -172,11 +176,38 @@ export async function render(root, ctx) {
         dots === null ? null : h('span', { class: 'summary-dots', 'aria-hidden': 'true', text: '●'.repeat(dots) + '○'.repeat(4 - dots) }),
         dots === null ? value : ` ${value}`));
 
-    setChildren(body, h('div', { class: 'chosen-ref' }, h('p', { text: `Malli: ${ref.name}` })),
+    // Tarkkuuden vaihto laskee tuloksen uudelleen heti; videota ei käsitellä toista kertaa.
+    function renderResult() {
+      setChildren(timeline,
+        ...result.timeline.map((worst, i) => {
+          const fill = h('div', { class: 'timeline-fill' });
+          fill.style.height = `${worst === null ? 8 : 8 + Math.min(1, worst / TIMELINE_FULL_DEG) * 92}%`;
+          fill.style.background = COLORS[levelOf(worst, strictness)];
+          return h('div', { class: 'timeline-bar', 'data-index': i }, fill);
+        }),
+        playhead);
+      setChildren(summary,
+        ...GROUP_NAMES.map(([key, name]) => summaryRow(name, result.groups[key].label, result.groups[key].dots)),
+        summaryRow('Ajoitus', result.timing.label, null));
+      stage?.redraw();
+    }
+
+    const strictnessSelect = h('select', { id: 'result-strictness', class: 'input' },
+      ...STRICTNESS_OPTIONS.map(([value, label]) => h('option', { value, selected: value === strictness }, label)));
+    strictnessSelect.addEventListener('change', () => {
+      strictness = strictnessSelect.value;
+      result = analyze(track, ref.track, strictness);
+      renderResult();
+      store.saveSettings({ ...settings, strictness }).catch(() => {});
+    });
+
+    setChildren(body,
+      h('div', { class: 'chosen-ref' }, h('p', { text: `Malli: ${ref.name}` })),
       result.detectedShare < PARTLY_DETECTED_SHARE ? h('p', { class: 'notice', text: COPY.partlyDetected }) : null,
       holder,
       h('label', { class: 'option', for: 'show-ref' }, showRef, h('span', { class: 'option-text' }, h('span', { class: 'option-label', text: 'Näytä malli' }))),
       h('h2', { text: 'Missä kohdissa erosit mallista' }),
+      h('p', { class: 'hint', text: 'Korkea palkki tarkoittaa, että jokin raaja oli sillä hetkellä kaukana mallista. Napauta palkkia siirtyäksesi kohtaan.' }),
       h('div', { class: 'timeline-wrap' }, timeline),
       h('ul', { class: 'legend' },
         h('li', {}, h('span', { class: 'swatch', style: `background:${COLORS.green}` }), 'lähellä'),
@@ -185,13 +216,14 @@ export async function render(root, ctx) {
         h('li', {}, h('span', { class: 'swatch swatch-dashed' }), 'ei tunnistettu'),
         h('li', {}, h('span', { class: 'swatch', style: `background:${COLORS.ghost}` }), 'malli')),
       h('h2', { text: 'Yhteenveto' }),
-      h('div', { class: 'summary' },
-        ...GROUP_NAMES.map(([key, name]) => summaryRow(name, result.groups[key].label, result.groups[key].dots)),
-        summaryRow('Ajoitus', result.timing.label, null)),
+      summary,
+      h('p', { class: 'hint', text: COPY.timingHint }),
+      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'result-strictness', text: 'Tarkkuus' }), strictnessSelect),
       h('p', { class: 'hint', text: COPY.honesty }),
       again,
       change,
     );
+    renderResult();
 
     try {
       stage = await mountStage(holder, file, {
@@ -221,7 +253,9 @@ export async function render(root, ctx) {
   // Kirjaston Analysoi-painike tuo mallin tunnisteen mukanaan.
   let preset = null;
   if (ctx.params.referenceId) preset = (await store.listReferences()).find((r) => r.id === ctx.params.referenceId) || null;
+  const kept = ctx.state.analysis;
   if (preset) stepPickVideo(preset);
+  else if (kept) await stepResult(kept.ref, kept.file, kept.range, kept.track); // palataan aiempaan tulokseen
   else await stepPickReference();
 
   return () => {

@@ -20,9 +20,35 @@ export function errorText(e) {
 }
 
 /**
+ * Pitää näytön päällä käsittelyn ajan. Jos puhelin lukittuu kesken, selain pysäyttää sivun
+ * ja käsittely katkeaa. Palauttaa funktion, jolla lukko vapautetaan.
+ */
+async function holdScreenAwake() {
+  let lock = null;
+  let done = false;
+  const acquire = async () => {
+    if (done || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    try {
+      lock = await navigator.wakeLock.request('screen');
+    } catch { /* selain voi kieltäytyä esim. virransäästötilassa */ }
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') acquire(); // lukko raukeaa, kun sivu käy piilossa
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  await acquire();
+  return () => {
+    done = true;
+    document.removeEventListener('visibilitychange', onVisible);
+    lock?.release().catch(() => {});
+    lock = null;
+  };
+}
+
+/**
  * Näyttää etenemisen ja peruutuspainikkeen ja poimii liikeradan.
  * @param {HTMLElement} body näkymän sisältöalue, joka korvataan
- * @param {{getEngine(): Promise<any>}} ctx
+ * @param {{getEngine(): Promise<any>, resetEngine?: () => void}} ctx
  * @param {Blob} file
  * @param {{start: number, end: number}} range
  * @param {{abort: (() => void)|null}} running näkymä voi perua käsittelyn tämän kautta
@@ -39,6 +65,7 @@ export async function runExtraction(body, ctx, file, range, running) {
     h('p', { class: 'hint', text: 'Pidä tämä sivu auki. Käsittely tapahtuu puhelimessasi ja voi kestää hetken.' }),
     h('button', { type: 'button', class: 'btn btn-block', onClick: () => controller.abort() }, 'Peruuta'),
   );
+  const releaseScreen = await holdScreenAwake();
   try {
     let engine;
     try {
@@ -58,8 +85,13 @@ export async function runExtraction(body, ctx, file, range, running) {
     });
   } catch (e) {
     if (e instanceof ExtractError && e.code === 'aborted') return null;
-    throw e;
+    if (e instanceof ExtractError || e.userMessage) throw e;
+    // Tunnistus kaatui kesken (esim. grafiikkayhteys katkesi taustalla käynnin jälkeen):
+    // hylätään moottori, jotta seuraava yritys luo uuden.
+    ctx.resetEngine?.();
+    throw Object.assign(new Error(COPY.engineFailed), { userMessage: COPY.engineFailed });
   } finally {
     running.abort = null;
+    releaseScreen();
   }
 }

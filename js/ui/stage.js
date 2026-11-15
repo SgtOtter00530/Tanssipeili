@@ -58,7 +58,7 @@ export async function mountStage(container, file, opts) {
 
   function tick() {
     if (destroyed) return;
-    if (!video.paused && video.currentTime >= end - 0.02) video.currentTime = start; // pätkä toistuu
+    if (!video.paused && (video.currentTime >= end - 0.02 || video.currentTime < start - 0.05)) video.currentTime = start; // pätkä toistuu
     const t = relTime();
     if (dirty || t !== lastTime) {
       ctx2d.clearRect(0, 0, width, height);
@@ -71,9 +71,17 @@ export async function mountStage(container, file, opts) {
     raf = requestAnimationFrame(tick);
   }
 
+  const outsideClip = () => video.ended || video.currentTime < start - 0.05 || video.currentTime >= end - 0.02;
   playBtn.addEventListener('click', () => {
-    if (video.paused) video.play().catch(() => {});
-    else video.pause();
+    if (!video.paused) return void video.pause();
+    if (outsideClip()) video.currentTime = start; // toisto alkaa aina rajatun pätkän sisältä
+    video.play().catch(() => {});
+  });
+  // Kun pätkä ulottuu videon loppuun, selain pysäyttää toiston: aloitetaan pätkä alusta.
+  video.addEventListener('ended', () => {
+    if (destroyed) return;
+    video.currentTime = start;
+    video.play().catch(() => {});
   });
   video.addEventListener('play', () => {
     playBtn.textContent = 'Tauko';

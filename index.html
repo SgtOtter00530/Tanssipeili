@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Selain estää kaikki yhteydet muualle kuin tähän sivustoon: videokuva ei voi poistua laitteesta. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#111318">
 <meta name="description" content="Vertaa omaa tanssiasi mallivideoon tikku-ukon avulla. Videot pysyvät puhelimessa.">

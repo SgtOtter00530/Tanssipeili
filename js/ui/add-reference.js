@@ -3,6 +3,8 @@ import { MAX_CLIP_SECONDS } from '../pose/extract.js';
 import { mirrorTrack } from '../core/track.js';
 import { mirrorLandmarks } from '../core/skeleton.js';
 import { drawSkeleton } from '../render/overlay.js';
+import { StoreFullError } from '../store/db.js';
+import { defaultKeepVideo, formatBytes } from '../core/limits.js';
 import { COPY } from './copy.js';
 import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
@@ -95,11 +97,12 @@ export async function render(root, ctx) {
     const styleSelect = h('select', { id: 'ref-style', class: 'input' },
       ...styles.map((s) => h('option', { value: s.id, selected: s.id === defaultStyle }, s.name)));
     const mirrorBox = h('input', { type: 'checkbox', id: 'ref-mirror' });
-    const keepBox = h('input', { type: 'checkbox', id: 'ref-keep', checked: true });
+    const keepBox = h('input', { type: 'checkbox', id: 'ref-keep', checked: defaultKeepVideo(file.size) });
     const saveBtn = h('button', { type: 'button', class: 'btn btn-primary btn-block' }, 'Tallenna');
     let saving = false;
     const syncSave = () => {
       saveBtn.disabled = saving || !usable || nameInput.value.trim() === '';
+      saveBtn.textContent = saving ? 'Tallennetaan…' : 'Tallenna';
     };
     nameInput.addEventListener('input', syncSave);
 
@@ -115,7 +118,7 @@ export async function render(root, ctx) {
       h('label', { class: 'option', for: 'ref-keep' }, keepBox,
         h('span', { class: 'option-text' },
           h('span', { class: 'option-label', text: 'Tallenna myös video puhelimeen' }),
-          h('span', { class: 'option-hint', text: COPY.keepVideoHint }))),
+          h('span', { class: 'option-hint', text: `${COPY.keepVideoHint} Koko video tallennetaan: ${formatBytes(file.size)}.` }))),
       saveBtn,
       h('button', { type: 'button', class: 'btn btn-block', onClick: () => stepTrim(file, range) }, 'Takaisin rajaukseen'),
     );
@@ -163,7 +166,8 @@ export async function render(root, ctx) {
       } catch (e) {
         saving = false;
         syncSave();
-        showError(errorText(e));
+        // Suuren videon tallennus voi epäonnistua muustakin syystä kuin tilan loppumisesta.
+        showError(!(e instanceof StoreFullError) && keepBox.checked ? COPY.saveFailedWithVideo : errorText(e));
         errorBox.scrollIntoView({ block: 'center' });
         return;
       }

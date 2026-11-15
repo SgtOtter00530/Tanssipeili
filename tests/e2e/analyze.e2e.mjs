@@ -84,7 +84,7 @@ await runTests('analyze', {
       assert.equal(await rowText(page, 'Kädet'), '●●●● lähellä mallia');
       assert.equal(await rowText(page, 'Jalat'), '●●●● lähellä mallia');
       assert.equal(await rowText(page, 'Vartalo'), '●●●● lähellä mallia');
-      assert.equal(await rowText(page, 'Ajoitus'), 'tahdissa');
+      assert.equal(await rowText(page, 'Ajoitus'), 'tahti pysyi tasaisena');
       assert.equal(await page.locator('.timeline-bar').count(), 60);
       await visible(page, COPY.honesty);
       assert.equal(await page.getByText(COPY.partlyDetected).count(), 0);
@@ -102,14 +102,81 @@ await runTests('analyze', {
       await page.waitForFunction(() => Math.abs(document.querySelector('.stage video').currentTime - 5.0) < 0.15);
       assert.deepEqual(pageErrors, []);
 
-      // 2) oma video alkaa puoli sekuntia aiemmin: liike arvioidaan silti läheiseksi
+      // tarkkuuden vaihto tulosnäkymässä laskee tuloksen heti uudelleen ja tallentuu
+      await page.getByLabel('Tarkkuus').selectOption('tarkka');
+      assert.equal(await page.locator('progress').count(), 0, 'videota ei käsitellä uudelleen');
+      assert.equal(await page.locator('.timeline-bar').count(), 60);
+      assert.equal(await page.locator('.summary-row').count(), 4);
+      await page.waitForFunction(async () => {
+        const { openStore } = await import('/js/store/db.js');
+        return (await (await openStore()).getSettings()).strictness === 'tarkka';
+      });
+      await page.getByLabel('Tarkkuus').selectOption('normaali');
+
+      // näkymästä poistuminen ei hävitä tulosta
+      await page.locator('nav.tabbar a', { hasText: 'Asetukset' }).click();
+      await visible(page, COPY.privacy);
+      await page.locator('nav.tabbar a', { hasText: 'Analysoi' }).click();
+      await page.locator('.summary-row').first().waitFor({ timeout: 5000 });
+      await visible(page, 'Malli: Kyykkysarja');
+      assert.equal(await page.locator('.timeline-bar').count(), 60);
+
+      // punainen polku: sama oma video verrataan malliin, jossa kädet ovat suorina ylhäällä.
+      // Mallin vaihto käyttää jo käsiteltyä omaa videota eikä käsittele sitä uudelleen.
+      await page.evaluate(async () => {
+        const { openStore } = await import('/js/store/db.js');
+        const s = await openStore();
+        const base = (await s.listReferences()).find((r) => r.name === 'Kyykkysarja');
+        const frames = base.track.frames.map((f) => {
+          if (!f.lm) return f;
+          const lm = f.lm.map((p) => ({ ...p }));
+          for (const [sh, el, wr] of [[11, 13, 15], [12, 14, 16]]) {
+            lm[el] = { x: lm[sh].x, y: lm[sh].y - 0.1, v: 1 };
+            lm[wr] = { x: lm[sh].x, y: lm[sh].y - 0.2, v: 1 };
+          }
+          return { t: f.t, lm };
+        });
+        await s.saveReference({ ...base, id: 'arms-up', name: 'Kädet ylhäällä', track: { ...base.track, frames }, video: null, createdAt: '2026-11-15T12:00:00.000Z' });
+      });
+      await page.getByRole('button', { name: 'Vaihda malli' }).click();
+      await page.locator('.pick-ref', { hasText: 'Kädet ylhäällä' }).click();
+      await page.locator('.summary-row').first().waitFor({ timeout: 5000 });
+      await visible(page, 'Malli: Kädet ylhäällä');
+      assert.equal(await rowText(page, 'Kädet'), '●○○○ paljon eroja');
+      assert.match(await rowText(page, 'Jalat'), /lähellä mallia/);
+      await waitForDrawing(page, '#result-overlay', 500);
+      await page.locator('.timeline-bar').nth(20).click();
+      await page.waitForTimeout(400);
+      assert.equal(await canvasHasColor(page, '#result-overlay', [231, 76, 60]), true, 'kädet näkyvät punaisina');
+      assert.equal(await canvasHasColor(page, '#result-overlay', [46, 204, 113]), true, 'jalat pysyvät vihreinä');
+      const redBars = await page.locator('.timeline-fill').evaluateAll((els) => els.filter((e) => e.style.background.includes('231, 76, 60')).length);
+      assert.ok(redBars >= 50, `aikajanalla punaisia palkkeja ${redBars}/60`);
+      // takaisin alkuperäiseen malliin
+      await page.getByRole('button', { name: 'Vaihda malli' }).click();
+      await page.locator('.pick-ref', { hasText: 'Kyykkysarja' }).click();
+      await page.locator('.summary-row').first().waitFor({ timeout: 5000 });
+      assert.equal(await rowText(page, 'Kädet'), '●●●● lähellä mallia');
+
+      // 2) oma video alkaa puoli sekuntia aiemmin: liike arvioidaan silti läheiseksi eikä rajausero näy ajoitusvirheenä.
+      //    Samalla asetusten luku epäonnistuu käsittelyn jälkeen: tulos näytetään silti oletustarkkuudella.
       await page.getByRole('button', { name: 'Analysoi toinen video' }).click();
       await visible(page, 'Malli: Kyykkysarja');
+      await page.evaluate(() => {
+        const realGet = IDBObjectStore.prototype.get;
+        IDBObjectStore.prototype.get = function (...args) {
+          if (this.name === 'settings') throw new DOMException('suljettu', 'InvalidStateError');
+          return realGet.apply(this, args);
+        };
+        window.__restoreGet = () => { IDBObjectStore.prototype.get = realGet; };
+      });
       await analyzeVideo(page, 'pose_squats.mp4', 1.5, 8);
       await page.locator('.summary-row').first().waitFor({ timeout: 240000 });
+      await page.evaluate(() => window.__restoreGet());
       assert.match(await rowText(page, 'Jalat'), /lähellä mallia/);
       assert.match(await rowText(page, 'Kädet'), /lähellä mallia/);
+      assert.equal(await rowText(page, 'Ajoitus'), 'tahti pysyi tasaisena');
       assert.equal(await page.locator('.timeline-bar').count(), 65);
+      await visible(page, COPY.timingHint);
 
       // 3) video ilman tanssijaa: selkeä viesti, ei tulosta
       await page.getByRole('button', { name: 'Analysoi toinen video' }).click();

@@ -8,13 +8,17 @@ Selaimessa toimiva sovellus, jolla tanssija vertaa omaa videotaan mallivideoon. 
 
 Videot ja liikeradat pysyvät tässä puhelimessa. Sovellus ei lähetä mitään verkkoon.
 
-Asennontunnistuksen malli ja kaikki muu koodi tarjoillaan tästä reposta. Sivu ei tee ajon aikana pyyntöjä muihin osoitteisiin, eikä siinä ole analytiikkaa. Tämä varmistetaan automaattisissa testeissä.
+Asennontunnistuksen malli ja kaikki muu koodi tarjoillaan tästä reposta. Sivu ei tee ajon aikana pyyntöjä muihin osoitteisiin, eikä siinä ole analytiikkaa. Sivun sisältökäytäntö (CSP) estää selaimessa yhteydet muualle, ja tämä varmistetaan automaattisissa testeissä.
 
 ## Mitä vaihe 1 sisältää
 
 - **Kirjasto.** Mallivideot tallennetaan tanssilajin alle (Street, Commercial, Hip-hop, Muu ja omat lajit).
 - **Mallin lisäys.** Video rajataan, sovellus poimii siitä liikeradan, ja mallin voi merkitä peilikuvaksi.
 - **Jälkianalyysi.** Oma video rajataan ja verrataan malliin. Tuloksena video tikku-ukkoineen, aikajana eroista ja yhteenveto käsistä, jaloista, vartalosta ja ajoituksesta.
+  - Videoiden alkukohdat sovitetaan yhteen automaattisesti (enintään 2 s), joten rajauksen ero ei näy virheenä.
+  - Sen jälkeen aikaa joustetaan vain vähän (enintään 0,5 s). Suurempi ero näkyy asentoerona.
+  - Kehonosan arvion ratkaisee sen heikoin raaja, ja aikajana näyttää kunkin hetken suurimman eron.
+  - Ajoitus kertoo vain, muuttuiko tahti pätkän aikana.
 - **Tarkkuusasetus.** Salliva, normaali tai tarkka.
 
 Reaaliaikainen kameratila, lisääminen kotinäytölle ja kirjaston varmuuskopiointi kuuluvat seuraaviin vaiheisiin. Tanssilajin automaattinen tunnistus ei ole mukana.
@@ -25,7 +29,9 @@ Reaaliaikainen kameratila, lisääminen kotinäytölle ja kirjaston varmuuskopio
 - Koko kehon pitää näkyä. Epävarmasti tunnistetut kohdat näytetään harmaina.
 - Kuvassa saa olla vain yksi tanssija.
 - Hyvin nopeat liikkeet ja löysät vaatteet heikentävät tunnistusta.
-- Värien raja-arvot ovat lähtöarvoja, joita ei ole vielä säädetty oikeilla tanssivideoilla.
+- Värien raja-arvot ja ajallisen jouston määrä ovat lähtöarvoja, joita ei ole vielä säädetty oikeilla tanssivideoilla.
+- Jos vain yksi raaja liikkuu tasaisesti ja muu keho on paikallaan, sovellus ei voi erottaa asentoeroa ajoituserosta.
+- Sovellusta ei ole vielä kokeiltu oikealla puhelimella. Katso `docs/puhelintesti.md`.
 - Selain voi tyhjentää tallennetun kirjaston, jos sivustoa ei käytetä pitkään aikaan.
 
 ## Kehitys

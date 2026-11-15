@@ -5,6 +5,7 @@ export const MAX_CLIP_SECONDS = 120;
 
 const LOAD_TIMEOUT_MS = 10000;
 const SEEK_TIMEOUT_MS = 10000;
+const FRAME_READY_TIMEOUT_MS = 3000;
 
 export class ExtractError extends Error {
   /** @param {'unsupported'|'too-long'|'aborted'} code */
@@ -83,6 +84,33 @@ function seekTo(video, t) {
 }
 
 /**
+ * Varmistaa, että videosta on purettu kuva ennen tunnistusta. Osa mobiiliselaimista ilmoittaa
+ * kelauksen valmiiksi ennen kuin kuva on käytettävissä, jolloin tunnistus saisi tyhjän kuvan.
+ */
+function frameReady(video) {
+  if (video.readyState >= 2) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      video.removeEventListener('loadeddata', done);
+      video.removeEventListener('canplay', done);
+      resolve();
+    };
+    const timer = setTimeout(done, FRAME_READY_TIMEOUT_MS);
+    video.addEventListener('loadeddata', done);
+    video.addEventListener('canplay', done);
+  });
+}
+
+/** Käynnistää ja pysäyttää äänettömän toiston kerran, jotta mobiiliselain alkaa purkaa kuvia. */
+async function primeDecoder(video) {
+  try {
+    await video.play();
+    video.pause();
+  } catch { /* automaattinen toisto voi olla estetty; kelaus toimii useimmiten silti */ }
+}
+
+/**
  * @param {Blob} file
  * @returns {Promise<{duration: number, width: number, height: number}>}
  */
@@ -115,9 +143,11 @@ export async function extractTrack(file, engine, opts = {}) {
     const end = Math.min(requestedEnd, video.duration);
     const total = Math.max(0, Math.round((end - start) * fps));
     const frames = [];
+    if (total > 0) await primeDecoder(video);
     for (let i = 0; i < total; i++) {
       checkAbort();
       await seekTo(video, start + i / fps);
+      await frameReady(video);
       checkAbort();
       const lm = await engine.detect(video);
       frames.push({ t: i / fps, lm });

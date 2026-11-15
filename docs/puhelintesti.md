@@ -27,6 +27,8 @@ Käytä lyhyttä, 10–20 sekunnin tanssivideota, jossa koko keho näkyy.
 - [ ] Lisää malli avaa puhelimen tiedostovalinnan.
 - [ ] Video näkyy rajausnäkymässä ja liukusäätimet siirtävät kuvaa.
 - [ ] Käsittely etenee ja valmistuu. Kauanko se kesti? Pätkän pituus ja käsittelyaika:
+- [ ] Näyttö pysyy päällä koko käsittelyn ajan. Älä koske puhelimeen käsittelyn aikana ja katso, sammuuko näyttö.
+- [ ] Jos saat viestin "Videosta ei löytynyt tanssijaa", vaikka tanssija näkyy selvästi, kirjaa se tähän. Se voi olla selaimen videonkäsittelyyn liittyvä vika eikä kuvauksen ongelma.
 - [ ] Esikatselussa valkoinen tikku-ukko osuu tanssijan päälle.
 - [ ] Tikku-ukko pysyy tanssijan mukana, kun videota toistaa tai kelaa.
 - [ ] Malli on peilikuva -valinta kääntää sekä videon että tikku-ukon.
@@ -37,12 +39,16 @@ Havainnot:
 ## 3. Jälkianalyysi
 
 - [ ] Kuvaa nyt avaa kameran videotilassa.
+- [ ] Tallentuuko Kuvaa nyt -painikkeella kuvattu video puhelimen galleriaan? (Sovellus ei tallenna omaa suoritustasi.)
 - [ ] Valitse galleriasta avaa videot.
 - [ ] Analyysi valmistuu. Pätkän pituus ja käsittelyaika:
 - [ ] Oma tikku-ukko (värillinen) osuu kehon päälle.
 - [ ] Mallin sininen tikku-ukko näkyy oman takana ja on järkevän kokoinen.
 - [ ] Aikajanan napautus siirtää videon oikeaan kohtaan.
 - [ ] Yhteenvedon rivit Kädet, Jalat, Vartalo ja Ajoitus näkyvät.
+- [ ] Tarkkuuden vaihto tulosnäkymässä muuttaa värejä heti, ilman uutta käsittelyä.
+- [ ] Käy Asetukset-välilehdellä ja palaa Analysoi-välilehdelle. Tulos on yhä näkyvissä.
+- [ ] Käy toisessa sovelluksessa kesken käsittelyn ja palaa. Jatkuuko käsittely vai tuleeko virheviesti?
 
 Havainnot:
 
@@ -54,7 +60,10 @@ Tämä on vaiheen 1 tärkein kysymys.
 - [ ] Kun tanssit mahdollisimman samoin, onko suurin osa vihreää?
 - [ ] Näkyykö nopeissa liikkeissä paljon harmaata (ei tunnistettu)?
 - [ ] Tuntuuko jokin väri väärältä: punaista, vaikka liike näytti samalta, tai vihreää, vaikka ero oli selvä?
-- [ ] Kokeile Asetuksista tarkkuudet Salliva ja Tarkka. Mikä taso tuntuu sopivimmalta?
+- [ ] Kokeile tarkkuudet Salliva ja Tarkka. Mikä taso tuntuu sopivimmalta?
+- [ ] Ajoitus: tanssi tarkoituksella niin, että jäät loppua kohti jälkeen. Sanooko Ajoitus-rivi niin?
+- [ ] Ajoitus: rajaa oma videosi alkamaan sekunnin liian aikaisin. Ajoituksen pitäisi silti olla "tahti pysyi tasaisena".
+- [ ] Yhteenveto: jos yksi käsi on koko ajan väärässä asennossa, sanooko Kädet-rivi "eroja" tai "paljon eroja"?
 
 Havainnot:
 
