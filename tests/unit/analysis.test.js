@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { LM } from '../../js/core/skeleton.js';
 import { analyze } from '../../js/core/analysis.js';
 import { sliceTrack, mirrorTrack } from '../../js/core/track.js';
-import { sweepTrack, padStart, offsetSweep, withNullFrames, hideLegs } from './helpers.js';
+import { sweepTrack, padStart, offsetSweep, withNullFrames, hideLegs, holdAt, halfSweep } from './helpers.js';
 
 const ref = sweepTrack(40);
 
@@ -16,29 +16,61 @@ test('sama rata itseään vastaan: kaikki lähellä mallia ja tahdissa', () => {
     assert.equal(a.groups[g].dots, 4);
     assert.equal(a.groups[g].label, 'lähellä mallia');
   }
-  assert.equal(a.timing.label, 'tahdissa');
+  assert.equal(a.timing.label, 'tahti pysyi tasaisena');
+  assert.equal(a.timing.shiftSec, 0);
   assert.equal(a.detectedShare, 1);
   assert.equal(a.perFrame[10].levels.lUpperArm, 'green');
   assert.ok(a.timeline[10] < 1);
 });
 
-test('puoli sekuntia myöhässä: ajoitus kertoo sen, kädet pysyvät lähellä mallia', () => {
-  const late = analyze(padStart(ref, 5), ref, 'normaali');
+test('rajausero ei ole ajoitusvirhe: puoli sekuntia aiemmin aloitettu video on tasaisessa tahdissa', () => {
+  const a = analyze(padStart(ref, 5), ref, 'normaali');
+  assert.equal(a.groups.arms.dots, 4);
+  assert.equal(a.timing.label, 'tahti pysyi tasaisena');
+  assert.ok(Math.abs(a.timing.shiftSec - -0.5) < 1e-9);
+  assert.ok(Math.abs(a.timing.driftSec) < 0.05);
+});
+
+test('kesken pätkän syntyvä viive näkyy ajoituksessa, ei asentovirheenä', () => {
+  const late = analyze(holdAt(ref, 19, 3), ref, 'normaali');
+  assert.equal(late.timing.label, 'jäit loppua kohti hieman jälkeen');
+  assert.ok(Math.abs(late.timing.driftSec - 0.3) < 0.11);
   assert.equal(late.groups.arms.dots, 4);
-  assert.match(late.timing.label, /jäljessä/);
-  assert.ok(Math.abs(late.timing.medianLagSec - 0.5) < 0.11);
+  const early = analyze(ref, holdAt(ref, 19, 3), 'normaali');
+  assert.equal(early.timing.label, 'nopeutit loppua kohti hieman');
+  const long = sweepTrack(80);
+  assert.equal(analyze(holdAt(long, 39, 5), long, 'normaali').timing.label, 'jäit loppua kohti selvästi jälkeen');
 });
 
-test('puoli sekuntia edellä: ajoitus sanoo edellä', () => {
-  const early = analyze(ref, padStart(ref, 5), 'normaali');
-  assert.match(early.timing.label, /edellä/);
-  assert.ok(early.timing.medianLagSec < 0);
+test('yksi koko ajan väärässä asennossa oleva raaja ei huku muiden joukkoon', () => {
+  const a = analyze(offsetSweep(40, { rUpperArm: 90 }), ref, 'normaali');
+  assert.equal(a.groups.arms.dots, 1);
+  assert.equal(a.groups.arms.label, 'paljon eroja');
+  assert.equal(a.groups.legs.dots, 4);
+  assert.ok(a.timeline[20] > 80, `aikajana näyttää pahimman raajan: ${a.timeline[20]}`);
+  assert.equal(a.perFrame[20].worst, a.timeline[20]);
 });
 
-test('ajoituksen sanamuodot noudattavat raja-arvoja', () => {
-  assert.equal(analyze(padStart(ref, 1), ref, 'normaali').timing.label, 'tahdissa');
-  assert.equal(analyze(padStart(ref, 3), ref, 'normaali').timing.label, 'hieman jäljessä');
-  assert.equal(analyze(padStart(ref, 6), ref, 'normaali').timing.label, 'selvästi jäljessä');
+test('vain puoleen väliin nouseva käsi ei näy lähellä mallia olevana', () => {
+  // Tavallisen mittainen pätkä (12 s): käsi jää loppua kohti yhä selvemmin mallia alemmas.
+  const a = analyze(halfSweep(120), sweepTrack(120), 'normaali');
+  assert.ok(a.groups.arms.dots <= 2, `arms dots ${a.groups.arms.dots}`);
+  assert.notEqual(a.groups.arms.label, 'lähellä mallia');
+  assert.equal(a.perFrame[119].levels.lUpperArm, 'red');
+  assert.ok(a.timeline.filter((d) => d !== null && d > 30).length >= 30, 'aikajanalla on pitkä punainen jakso');
+  assert.equal(a.groups.legs.dots, 4);
+  // Lyhyessäkään pätkässä (4 s) ajallinen jousto ei saa selittää eroa pois: jousto kiristyy pätkän mukana.
+  const short = analyze(halfSweep(40), ref, 'normaali');
+  assert.ok(short.groups.arms.dots <= 3, `arms dots ${short.groups.arms.dots}`);
+  assert.equal(short.perFrame[39].levels.lUpperArm, 'red');
+});
+
+test('oman videon kohdat, joita malli ei kata, ovat tuntemattomia eivätkä punaisia', () => {
+  const a = analyze(padStart(ref, 12), ref, 'normaali');
+  assert.equal(a.map[0], -1);
+  assert.equal(a.perFrame[0].levels.lUpperArm, 'unknown');
+  assert.equal(a.timeline[0], null);
+  assert.equal(a.groups.arms.dots, 4);
 });
 
 test('kädet selvästi eri asennossa: kädet saavat heikon arvion, jalat pysyvät hyvinä', () => {

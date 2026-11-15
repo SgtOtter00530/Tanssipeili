@@ -4,6 +4,20 @@ import { SEGMENTS, point } from './skeleton.js';
 /** Tätä heikommin näkyvää pistettä ei käytetä vertailuun. */
 export const MIN_VIS = 0.5;
 
+/** Kuvan reunan yli saa mennä tämän verran (osuus kuvan mitasta), ennen kuin piste hylätään. */
+export const FRAME_MARGIN = 0.02;
+
+/**
+ * Kelpaako piste vertailuun: riittävän näkyvä ja kuvan sisällä. Kuvan ulkopuolelle
+ * arvattua pistettä ei käytetä, vaikka tunnistus ilmoittaisi sen näkyväksi.
+ * @param {import('./skeleton.js').Landmark} p
+ */
+export function isUsable(p) {
+  return p.v >= MIN_VIS
+    && p.x >= -FRAME_MARGIN && p.x <= 1 + FRAME_MARGIN
+    && p.y >= -FRAME_MARGIN && p.y <= 1 + FRAME_MARGIN;
+}
+
 /** Värirajat asteina tarkkuusasetuksen mukaan. Lähtöarvoja, säädetään oikeilla videoilla. */
 export const THRESHOLDS = Object.freeze({
   salliva: Object.freeze({ green: 25, yellow: 45 }),
@@ -21,7 +35,7 @@ export const THRESHOLDS = Object.freeze({
 export function segmentAngle(lm, seg, aspect) {
   const a = point(lm, seg.from);
   const b = point(lm, seg.to);
-  if (a.v < MIN_VIS || b.v < MIN_VIS) return null;
+  if (!isUsable(a) || !isUsable(b)) return null;
   // Normalisoidut koordinaatit ovat akselikohtaisia, joten x skaalataan kuvasuhteella.
   return (Math.atan2(b.y - a.y, (b.x - a.x) * aspect) * 180) / Math.PI;
 }

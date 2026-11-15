@@ -1,22 +1,25 @@
 // Kokonaisanalyysi: kohdistus, kuvakohtaiset tasot, aikajana, kehonosayhteenveto ja ajoitus.
 import { SEGMENTS } from './skeleton.js';
 import { segmentAngle, angleDiff, levelOf } from './compare.js';
-import { alignTracks } from './dtw.js';
+import { findShift, alignTracks } from './dtw.js';
 
 /** @typedef {{dots: 0|1|2|3|4, label: string}} GroupRating */
 /** @typedef {{
  *   map: Int32Array,
- *   perFrame: {diffs: Record<string, number|null>, levels: Record<string, import('./skeleton.js').Level>, mean: number|null}[],
+ *   perFrame: {diffs: Record<string, number|null>, levels: Record<string, import('./skeleton.js').Level>, worst: number|null}[],
  *   timeline: (number|null)[],
  *   groups: {arms: GroupRating, legs: GroupRating, core: GroupRating},
- *   timing: {medianLagSec: number, label: string},
+ *   timing: {driftSec: number, shiftSec: number, label: string},
  *   detectedShare: number
  * }} Analysis */
 
-/** Ryhmän arvioinnin rajat: vihreiden osuus tunnetuista havainnoista. */
+/** Kohdistuksen rajat. Lähtöarvoja, säädetään oikeilla videoilla. */
+// Ajallinen jousto ei saa olla suuri osa pätkästä: lyhyessä pätkässä rajat kiristyvät (osuus pätkän pituudesta).
+export const ALIGN_RULES = Object.freeze({ maxShiftSec: 2, maxShiftShare: 0.15, bandSec: 0.5, bandShare: 0.08, warpPenaltyDeg: 6 });
+/** Ryhmän arvio: heikoimman raajan vihreiden osuus tunnetuista havainnoista. */
 export const GROUP_RULES = Object.freeze({ minKnownShare: 0.3, four: 0.85, three: 0.65, two: 0.4 });
 /** Ajoituksen rajat sekunteina. */
-export const TIMING_RULES = Object.freeze({ inSync: 0.15, slight: 0.4 });
+export const TIMING_RULES = Object.freeze({ steady: 0.15, slight: 0.4 });
 
 const NO_PERSON_COST = 90;
 
@@ -46,43 +49,58 @@ function pairCost(ua, ra) {
   return n ? sum / n : NO_PERSON_COST;
 }
 
+/**
+ * Ryhmän arvio lasketaan raajoittain ja heikoin raaja ratkaisee. Näin yksi koko ajan
+ * väärässä asennossa oleva raaja ei huku muiden hyvien joukkoon.
+ */
 function rateGroup(perFrame, group) {
   const ids = SEGMENTS.filter((s) => s.group === group).map((s) => s.id);
-  let total = 0;
-  let known = 0;
-  let green = 0;
-  for (const f of perFrame) {
-    for (const id of ids) {
-      total++;
+  const total = perFrame.length;
+  let weakest = null;
+  for (const id of ids) {
+    let known = 0;
+    let green = 0;
+    for (const f of perFrame) {
       const level = f.levels[id];
       if (level !== 'unknown') known++;
       if (level === 'green') green++;
     }
+    if (!total || known / total < GROUP_RULES.minKnownShare) continue; // tätä raajaa ei nähty tarpeeksi
+    const share = green / known;
+    if (weakest === null || share < weakest) weakest = share;
   }
-  if (total === 0 || known / total < GROUP_RULES.minKnownShare) return { dots: 0, label: 'ei pystytty arvioimaan' };
-  const share = green / known;
-  if (share >= GROUP_RULES.four) return { dots: 4, label: 'lähellä mallia' };
-  if (share >= GROUP_RULES.three) return { dots: 3, label: 'lähellä mallia' };
-  if (share >= GROUP_RULES.two) return { dots: 2, label: 'eroja' };
+  if (weakest === null) return { dots: 0, label: 'ei pystytty arvioimaan' };
+  if (weakest >= GROUP_RULES.four) return { dots: 4, label: 'lähellä mallia' };
+  if (weakest >= GROUP_RULES.three) return { dots: 3, label: 'lähellä mallia' };
+  if (weakest >= GROUP_RULES.two) return { dots: 2, label: 'eroja' };
   return { dots: 1, label: 'paljon eroja' };
 }
 
-function timingOf(userTrack, refTrack, map) {
+const median = (values) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = sorted.length >> 1;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+/**
+ * Ajoitus kertoo vain, muuttuiko tahti pätkän aikana. Alun eroa ei voi mitata, koska
+ * pätkät rajataan käsin; se sisältyy siirtymään (shiftSec), eikä sitä esitetä virheenä.
+ */
+function timingOf(map, shift, fps) {
   const lags = [];
   for (let i = 0; i < map.length; i++) {
-    if (map[i] >= 0) lags.push(userTrack.frames[i].t - refTrack.frames[map[i]].t);
+    if (map[i] >= 0) lags.push((i + shift - map[i]) / fps); // positiivinen = jäljessä mallista
   }
-  if (!lags.length) return { medianLagSec: 0, label: 'tahdissa' };
-  lags.sort((a, b) => a - b);
-  const mid = lags.length >> 1;
-  const median = lags.length % 2 ? lags[mid] : (lags[mid - 1] + lags[mid]) / 2;
-  const abs = Math.abs(median);
-  let label = 'tahdissa';
-  if (abs >= TIMING_RULES.inSync) {
+  const third = Math.floor(lags.length / 3);
+  const drift = third >= 1 ? median(lags.slice(lags.length - third)) - median(lags.slice(0, third)) : 0;
+  const abs = Math.abs(drift);
+  let label = 'tahti pysyi tasaisena';
+  if (abs >= TIMING_RULES.steady) {
     const amount = abs > TIMING_RULES.slight ? 'selvästi' : 'hieman';
-    label = `${amount} ${median > 0 ? 'jäljessä' : 'edellä'}`;
+    label = drift > 0 ? `jäit loppua kohti ${amount} jälkeen` : `nopeutit loppua kohti ${amount}`;
   }
-  return { medianLagSec: median, label };
+  return { driftSec: drift, shiftSec: shift / fps, label };
 }
 
 /**
@@ -92,34 +110,36 @@ function timingOf(userTrack, refTrack, map) {
  * @returns {Analysis}
  */
 export function analyze(userTrack, refTrack, strictness) {
+  const fps = userTrack.fps;
   const uAspect = userTrack.width / userTrack.height;
   const rAspect = refTrack.width / refTrack.height;
   const uAngles = userTrack.frames.map((f) => anglesOf(f, uAspect));
   const rAngles = refTrack.frames.map((f) => anglesOf(f, rAspect));
-  const map = alignTracks(uAngles, rAngles, pairCost);
+  const shorter = Math.min(uAngles.length, rAngles.length);
+  const maxShift = Math.min(Math.round(ALIGN_RULES.maxShiftSec * fps), Math.floor(ALIGN_RULES.maxShiftShare * shorter));
+  const band = Math.min(Math.round(ALIGN_RULES.bandSec * fps), Math.max(1, Math.floor(ALIGN_RULES.bandShare * shorter)));
+  const shift = findShift(uAngles, rAngles, pairCost, maxShift);
+  const map = alignTracks(uAngles, rAngles, pairCost, { shift, band, warpPenalty: ALIGN_RULES.warpPenaltyDeg });
 
   const perFrame = uAngles.map((ua, i) => {
     const diffs = diffsOf(ua, map[i] >= 0 ? rAngles[map[i]] : null);
     const levels = {};
-    let sum = 0;
-    let n = 0;
+    let worst = null;
     for (const [id, d] of Object.entries(diffs)) {
       levels[id] = levelOf(d, strictness);
-      if (d !== null) {
-        sum += d;
-        n++;
-      }
+      if (d !== null && (worst === null || d > worst)) worst = d;
     }
-    return { diffs, levels, mean: n ? sum / n : null };
+    return { diffs, levels, worst };
   });
 
   const detected = userTrack.frames.filter((f) => f.lm).length;
   return {
     map,
     perFrame,
-    timeline: perFrame.map((f) => f.mean),
+    // Aikajana näyttää kunkin hetken suurimman eron, jotta yhden raajan virhe ei laimene keskiarvoon.
+    timeline: perFrame.map((f) => f.worst),
     groups: { arms: rateGroup(perFrame, 'arms'), legs: rateGroup(perFrame, 'legs'), core: rateGroup(perFrame, 'core') },
-    timing: timingOf(userTrack, refTrack, map),
+    timing: timingOf(map, shift, fps),
     detectedShare: userTrack.frames.length ? detected / userTrack.frames.length : 0,
   };
 }

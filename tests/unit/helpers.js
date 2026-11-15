@@ -105,3 +105,19 @@ export function hideLegs(track) {
 export function shrinkAndShift(lm, scale, dx) {
   return lm.map((p) => ({ x: 0.5 + (p.x - 0.5) * scale + dx, y: 0.5 + (p.y - 0.5) * scale, v: p.v }));
 }
+
+/** Sama rata, johon on lisätty keskelle paikallaan pysyvä tauko (hold kuvaa kohdassa at). */
+export function holdAt(track, at, hold) {
+  const frames = [...track.frames.slice(0, at + 1), ...Array.from({ length: hold }, () => ({ t: 0, lm: track.frames[at].lm })), ...track.frames.slice(at + 1)];
+  return retime({ ...track, frames });
+}
+
+/** Vasen käsi nousee vain puoleen väliin (sivulle), kun mallissa se nousee ylös asti. */
+export function halfSweep(n, fps = 10) {
+  const frames = [];
+  for (let i = 0; i < n; i++) {
+    const deg = 90 - (90 * i) / (n - 1);
+    frames.push({ t: i / fps, lm: poseFromAngles({ lUpperArm: deg, lForearm: deg }) });
+  }
+  return { fps, width: 720, height: 1280, frames };
+}

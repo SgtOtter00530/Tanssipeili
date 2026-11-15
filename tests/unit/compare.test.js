@@ -80,3 +80,15 @@ test('kuvan kustannus on tunnettujen erojen keskiarvo, 90 jos mitään ei tunnet
   assert.equal(frameCost({ a: null }), 90);
   assert.equal(frameCost({}), 90);
 });
+
+test('kuvan ulkopuolelle arvattu piste tekee segmentistä tuntemattoman', () => {
+  const pose = poseFromAngles({});
+  const out = pose.map((p, i) => (i === LM.L_WRIST ? { x: 1.1, y: p.y, v: 0.9 } : p));
+  assert.equal(segmentAngle(out, seg('lForearm'), 9 / 16), null);
+  assert.notEqual(segmentAngle(out, seg('lUpperArm'), 9 / 16), null);
+  const below = pose.map((p, i) => (i === LM.L_ANKLE ? { x: p.x, y: 1.08, v: 0.9 } : p));
+  assert.equal(compareFrames(below, pose, 1, 1).lShin, null);
+  // aivan reunalla oleva piste kelpaa
+  const edge = pose.map((p, i) => (i === LM.L_ANKLE ? { x: p.x, y: 1.0, v: 0.9 } : p));
+  assert.notEqual(compareFrames(edge, pose, 1, 1).lShin, null);
+});

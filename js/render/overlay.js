@@ -1,6 +1,6 @@
 // Tikku-ukon piirto canvasiin videon tai kamerakuvan päälle.
 import { SEGMENTS, DRAW_EXTRA, LM, point } from '../core/skeleton.js';
-import { MIN_VIS } from '../core/compare.js';
+import { isUsable } from '../core/compare.js';
 
 export const COLORS = Object.freeze({
   green: '#2ecc71',
@@ -56,7 +56,7 @@ export function drawSkeleton(ctx, lm, opts) {
   const drawSegment = (seg, level) => {
     const a = toPx(point(lm, seg.from));
     const b = toPx(point(lm, seg.to));
-    const visible = a.v >= MIN_VIS && b.v >= MIN_VIS;
+    const visible = isUsable(point(lm, seg.from)) && isUsable(point(lm, seg.to));
     if (ghost) {
       // Malli piirretään leveänä nauhana, jotta se näkyy oman ukon takaa silloinkin, kun asennot osuvat kohdakkain.
       if (visible) line(ctx, a, b, COLORS.ghost, base * GHOST_WIDTH, false);
@@ -82,11 +82,11 @@ export function drawSkeleton(ctx, lm, opts) {
     const p = toPx(lm[j]);
     const r = base * (j === LM.NOSE ? 2.2 : 1.2);
     if (ghost) {
-      if (p.v >= MIN_VIS && j === LM.NOSE) disc(ctx, p, r * 1.5, COLORS.ghost);
+      if (isUsable(lm[j]) && j === LM.NOSE) disc(ctx, p, r * 1.5, COLORS.ghost);
       continue;
     }
     let level = null;
-    if (p.v < MIN_VIS) {
+    if (!isUsable(lm[j])) {
       level = 'unknown';
     } else if (levels) {
       let worst = 0;

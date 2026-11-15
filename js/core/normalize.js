@@ -1,11 +1,11 @@
 // Mallin tikku-ukon sovitus tanssijan kehon kohdalle ja kokoon.
 import { point } from './skeleton.js';
-import { MIN_VIS } from './compare.js';
+import { isUsable } from './compare.js';
 
 function anchor(lm, aspect) {
   const hip = point(lm, 'hipCenter');
   const sh = point(lm, 'shoulderCenter');
-  if (hip.v < MIN_VIS || sh.v < MIN_VIS) return null;
+  if (!isUsable(hip) || !isUsable(sh)) return null;
   const torso = Math.hypot((sh.x - hip.x) * aspect, sh.y - hip.y);
   if (!(torso > 1e-6)) return null;
   return { hip, torso };
