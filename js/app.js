@@ -2,6 +2,7 @@
 import { openStore } from './store/db.js';
 import { createEngine } from './pose/engine.js';
 import { COPY } from './ui/copy.js';
+import { diag } from './core/diag.js';
 
 /** @typedef {{store: any, navigate(hash: string, params?: object): void, getEngine(): Promise<any>, resetEngine(): void, params: Record<string, any>, state: Record<string, any>}} AppContext */
 
@@ -86,8 +87,35 @@ async function renderRoute(token) {
   }
 }
 
+/** Näytönohjaimen nimi vianmääritystä varten. Apuyhteys suljetaan heti. */
+function gpuName() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return 'ei-webgl';
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return name;
+  } catch {
+    return 'tuntematon';
+  }
+}
+
+window.addEventListener('error', (e) => diag.log('sivuvirhe', { viesti: e.message, paikka: `${(e.filename || '').split('/').pop()}:${e.lineno || 0}` }));
+window.addEventListener('unhandledrejection', (e) => diag.log('sivuvirhe', { viesti: String(e.reason && e.reason.message ? e.reason.message : e.reason) }));
+document.addEventListener('visibilitychange', () => diag.log('näkyvyys', { tila: document.visibilityState }));
+
 async function start() {
   ctx.store = await openStore();
+  diag.log('käynnistys', {
+    selain: navigator.userAgent,
+    näkymä: `${window.innerWidth}x${window.innerHeight}`,
+    dpr: window.devicePixelRatio,
+    'muisti-gt': navigator.deviceMemory,
+    ytimet: navigator.hardwareConcurrency,
+    gpu: gpuName(),
+    pysyvä: ctx.store.persistent,
+  });
   if (!ctx.store.persistent) {
     banner.textContent = COPY.notPersistent;
     banner.hidden = false;

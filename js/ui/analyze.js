@@ -4,11 +4,12 @@ import { analyze } from '../core/analysis.js';
 import { projectReference } from '../core/normalize.js';
 import { levelOf } from '../core/compare.js';
 import { drawSkeleton, COLORS } from '../render/overlay.js';
+import { diag } from '../core/diag.js';
 import { COPY } from './copy.js';
 import { h, formatDuration, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, logChosenFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
 
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
@@ -27,10 +28,7 @@ export async function render(root, ctx) {
   const running = { abort: null };
   let disposed = false;
 
-  const showError = (text) => {
-    errorBox.textContent = text;
-    errorBox.hidden = !text;
-  };
+  const showError = (text, detail) => setError(errorBox, text, detail);
   const dispose = () => {
     trim?.destroy();
     trim = null;
@@ -78,7 +76,10 @@ export async function render(root, ctx) {
     dispose();
     const onFile = (input) => input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) stepTrim(ref, file, null);
+      if (file) {
+        logChosenFile(file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria');
+        stepTrim(ref, file, null);
+      }
     });
     const camera = h('input', { type: 'file', id: 'pick-camera', accept: 'video/*', capture: 'environment', class: 'visually-hidden' });
     const gallery = h('input', { type: 'file', id: 'pick-gallery', accept: 'video/*', class: 'visually-hidden' });
@@ -103,7 +104,7 @@ export async function render(root, ctx) {
     } catch (e) {
       if (disposed) return;
       stepPickVideo(ref);
-      showError(errorText(e));
+      showError(errorText(e), errorDetail(e));
       return;
     }
     if (disposed) return void dispose();
@@ -125,7 +126,7 @@ export async function render(root, ctx) {
     } catch (e) {
       if (disposed) return;
       await stepTrim(ref, file, range);
-      showError(errorText(e));
+      showError(errorText(e), errorDetail(e));
       return;
     }
     if (disposed) return;
@@ -148,6 +149,11 @@ export async function render(root, ctx) {
     if (disposed) return;
     let strictness = settings.strictness || 'normaali';
     let result = analyze(track, ref.track, strictness);
+    diag.log('analyysi', {
+      kuvia: track.frames.length, 'mallin-kuvia': ref.track.frames.length,
+      'tunnistettu-osuus': result.detectedShare.toFixed(2), siirtymä: result.timing.shiftSec.toFixed(1),
+      kädet: result.groups.arms.dots, jalat: result.groups.legs.dots, vartalo: result.groups.core.dots,
+    });
 
     if (result.detectedShare < MIN_DETECTED_SHARE) {
       ctx.state.analysis = null;
@@ -230,6 +236,7 @@ export async function render(root, ctx) {
         start: range.start,
         end: range.end,
         overlayId: 'result-overlay',
+        onError: (detail) => showError(COPY.playbackFailed, detail),
         draw(ctx2d, t, width, height) {
           const i = indexAt(t);
           playhead.style.left = `${((i + 0.5) / n) * 100}%`;
@@ -244,7 +251,7 @@ export async function render(root, ctx) {
         },
       });
     } catch (e) {
-      if (!disposed) showError(errorText(e));
+      if (!disposed) showError(errorText(e), errorDetail(e));
     }
     if (disposed) return void dispose();
     showRef.addEventListener('change', () => stage?.redraw());

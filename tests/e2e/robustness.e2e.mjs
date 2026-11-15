@@ -114,6 +114,52 @@ await runTests('robustness', {
       await page.locator('.ref-card', { hasText: 'Lyhyt' }).waitFor();
     }),
 
+  'virheen yhteydessä näkyy tekninen tieto, ja vianmäärityslokin voi lukea ja tyhjentää asetuksista': () =>
+    withPage(async ({ page, url, externalRequests }) => {
+      await page.goto(`${url}/#lisaa-malli`);
+      await page.locator('#ref-file').setInputFiles(fixture('not-a-video.mp4'));
+      await visible(page, COPY.unsupported);
+      const detail = await page.locator('.error-detail').textContent();
+      assert.match(detail, /^Tekninen tieto: .*(koodi|aikakatkaisu)/, detail);
+      // onnistunut käsittely ja sen jälkeen toiston katkeaminen kesken esikatselun
+      await page.locator('#ref-file').setInputFiles(fixture('pose_squats.mp4'));
+      await page.getByRole('button', { name: 'Jatka' }).waitFor();
+      await setTrim(page, 2, 3);
+      await page.getByRole('button', { name: 'Jatka' }).click();
+      await page.getByRole('heading', { name: 'Esikatselu' }).waitFor({ timeout: 120000 });
+      await page.locator('.stage video').waitFor({ state: 'attached' });
+      await page.locator('.stage-play').click();
+      await page.waitForFunction(() => !document.querySelector('.stage video').paused);
+      await page.locator('.stage-play').click();
+      await page.evaluate(() => {
+        document.querySelector('.stage video').src = URL.createObjectURL(new Blob(['rikki'], { type: 'video/mp4' }));
+      });
+      await visible(page, COPY.playbackFailed);
+      assert.match(await page.locator('.error-detail').textContent(), /Tekninen tieto: .*koodi/);
+      // loki asetuksissa
+      await page.goto(`${url}/#asetukset`);
+      await page.getByRole('heading', { name: 'Vianmääritys' }).waitFor();
+      const log = await page.locator('#diag-log').inputValue();
+      assert.match(log, /käynnistys .*selain=/);
+      assert.match(log, /video-virhe vaihe=rajaus/);
+      assert.match(log, /video-auki vaihe=rajaus leveys=720 korkeus=1280/);
+      assert.match(log, /käsittely-valmis kuvia=10 tunnistettu=\d+ .*ms-per-kuva=\d+/);
+      assert.match(log, /video-virhe vaihe=toisto/);
+      assert.match(log, /video-auki vaihe=toisto leveys=720/);
+      assert.match(log, /toisto-pyyntö kohta=[\d.]+ valmius=\d verkkotila=\d tauolla=true/);
+      assert.match(log, /video-valittu käyttö=malli tyyppi=video\/mp4 koko-mt=0\.5/);
+      assert.match(log, /näyttölukko tila=/);
+      assert.doesNotMatch(log, /pose_squats|not-a-video/, 'tiedostojen nimiä ei kirjata');
+      assert.equal(await page.getByRole('button', { name: 'Kopioi loki' }).count(), 1);
+      // loki säilyy uudelleenlatauksen yli ja tyhjenee pyydettäessä
+      await page.reload();
+      await page.getByRole('heading', { name: 'Vianmääritys' }).waitFor();
+      assert.match(await page.locator('#diag-log').inputValue(), /video-virhe vaihe=toisto/);
+      await page.getByRole('button', { name: 'Tyhjennä loki' }).click();
+      assert.doesNotMatch(await page.locator('#diag-log').inputValue(), /video-virhe/);
+      assert.equal(externalRequests.length, 0);
+    }),
+
   'tunnistuksen kaatuminen kesken käsittelyn: selkeä viesti ja uusi yritys käynnistää tunnistuksen uudelleen': () =>
     withPage(async ({ page, url }) => {
       await page.goto(`${url}/#lisaa-malli`);

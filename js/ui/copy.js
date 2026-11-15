@@ -11,6 +11,8 @@ export const COPY = Object.freeze({
   storeFull: 'Tallennustila ei riittänyt. Kokeile tallentaa malli ilman videota.',
   saveFailedWithVideo: 'Tallennus ei onnistunut. Kokeile tallentaa malli ilman videota.',
   timingHint: 'Ajoitus kertoo, muuttuiko tahtisi pätkän aikana malliin verrattuna. Videoiden alkukohdat sovitetaan yhteen automaattisesti, joten rajauksen ero ei näy virheenä.',
+  playbackFailed: 'Videon toisto keskeytyi. Valitse video uudelleen.',
+  diagIntro: 'Jos jokin ei toimi, tästä lokista näkee, mitä tapahtui. Loki pysyy tässä puhelimessa, eikä siinä ole videokuvaa tai tiedostojen nimiä. Kopioi se ja lähetä sovelluksen tekijälle.',
   privacy: 'Videot ja liikeradat pysyvät tässä puhelimessa. Sovellus ei lähetä mitään verkkoon.',
   emptyStyle: 'Tässä lajissa ei ole vielä malleja.',
   keepVideoHint: 'Tarvitaan, jotta mallin musiikki kuuluu harjoitellessa. Video pysyy puhelimessa.',

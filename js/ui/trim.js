@@ -1,5 +1,6 @@
 // Jaettu rajauskomponentti: video ja liukusäätimet pätkän alulle ja lopulle.
-import { ExtractError } from '../pose/extract.js';
+import { ExtractError, mediaErrorDetail } from '../pose/extract.js';
+import { diag } from '../core/diag.js';
 import { COPY } from './copy.js';
 import { h, formatClock, formatDuration } from './dom.js';
 
@@ -9,23 +10,28 @@ const round1 = (v) => Math.round(v * 10) / 10;
 
 function loadVideo(video, url) {
   return new Promise((resolve, reject) => {
-    const fail = () => {
+    const fail = (detail) => {
       cleanup();
-      reject(new ExtractError('unsupported'));
+      diag.log('video-virhe', { vaihe: 'rajaus', tieto: detail });
+      reject(new ExtractError('unsupported', undefined, detail));
     };
+    const onError = () => fail(mediaErrorDetail(video, 'virhe videon avauksessa'));
     const ok = () => {
+      if (!(video.videoWidth > 0) || !Number.isFinite(video.duration) || !(video.duration > 0)) {
+        return fail(`video ilman kuvaa tai kestoa (leveys ${video.videoWidth}, kesto ${video.duration})`);
+      }
       cleanup();
-      if (!(video.videoWidth > 0) || !Number.isFinite(video.duration) || !(video.duration > 0)) reject(new ExtractError('unsupported'));
-      else resolve();
+      diag.log('video-auki', { vaihe: 'rajaus', leveys: video.videoWidth, korkeus: video.videoHeight, kesto: video.duration.toFixed(1) });
+      resolve();
     };
-    const timer = setTimeout(fail, 10000);
+    const timer = setTimeout(() => fail(mediaErrorDetail(video, 'aikakatkaisu videon avauksessa')), 30000);
     const cleanup = () => {
       clearTimeout(timer);
       video.removeEventListener('loadedmetadata', ok);
-      video.removeEventListener('error', fail);
+      video.removeEventListener('error', onError);
     };
     video.addEventListener('loadedmetadata', ok);
-    video.addEventListener('error', fail);
+    video.addEventListener('error', onError);
     video.src = url;
   });
 }

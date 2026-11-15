@@ -4,12 +4,13 @@ import { mirrorTrack } from '../core/track.js';
 import { mirrorLandmarks } from '../core/skeleton.js';
 import { drawSkeleton } from '../render/overlay.js';
 import { StoreFullError } from '../store/db.js';
+import { diag } from '../core/diag.js';
 import { defaultKeepVideo, formatBytes } from '../core/limits.js';
 import { COPY } from './copy.js';
 import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, MIN_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, logChosenFile, MIN_DETECTED_SHARE } from './process.js';
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -24,10 +25,7 @@ export async function render(root, ctx) {
   const running = { abort: null };
   let disposed = false;
 
-  const showError = (text) => {
-    errorBox.textContent = text;
-    errorBox.hidden = !text;
-  };
+  const showError = (text, detail) => setError(errorBox, text, detail);
   const dispose = () => {
     trim?.destroy();
     trim = null;
@@ -40,7 +38,10 @@ export async function render(root, ctx) {
     const input = h('input', { type: 'file', id: 'ref-file', accept: 'video/*', class: 'visually-hidden' });
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) stepTrim(file, null);
+      if (file) {
+        logChosenFile(file, 'malli');
+        stepTrim(file, null);
+      }
     });
     setChildren(body, h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
       h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
@@ -56,7 +57,7 @@ export async function render(root, ctx) {
     } catch (e) {
       if (disposed) return;
       stepPick();
-      showError(errorText(e));
+      showError(errorText(e), errorDetail(e));
       return;
     }
     if (disposed) return void dispose();
@@ -78,7 +79,7 @@ export async function render(root, ctx) {
     } catch (e) {
       if (disposed) return;
       await stepTrim(file, range);
-      showError(errorText(e));
+      showError(errorText(e), errorDetail(e));
       return;
     }
     if (disposed) return;
@@ -129,6 +130,7 @@ export async function render(root, ctx) {
         start: range.start,
         end: range.end,
         overlayId: 'preview-overlay',
+        onError: (detail) => showError(COPY.playbackFailed, detail),
         draw(ctx2d, t, width, height) {
           const frame = track.frames[Math.min(track.frames.length - 1, Math.round(t * track.fps))];
           if (!frame || !frame.lm) return;
@@ -136,7 +138,7 @@ export async function render(root, ctx) {
         },
       });
     } catch (e) {
-      if (!disposed) showError(errorText(e));
+      if (!disposed) showError(errorText(e), errorDetail(e));
     }
     if (disposed) return void dispose();
 
@@ -167,7 +169,8 @@ export async function render(root, ctx) {
         saving = false;
         syncSave();
         // Suuren videon tallennus voi epäonnistua muustakin syystä kuin tilan loppumisesta.
-        showError(!(e instanceof StoreFullError) && keepBox.checked ? COPY.saveFailedWithVideo : errorText(e));
+        diag.log('tallennus-virhe', { tieto: errorDetail(e), video: keepBox.checked, 'koko-mt': (file.size / (1024 * 1024)).toFixed(1) });
+        showError(!(e instanceof StoreFullError) && keepBox.checked ? COPY.saveFailedWithVideo : errorText(e), errorDetail(e));
         errorBox.scrollIntoView({ block: 'center' });
         return;
       }

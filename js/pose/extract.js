@@ -3,17 +3,29 @@
 export const ANALYSIS_FPS = 10;
 export const MAX_CLIP_SECONDS = 120;
 
-const LOAD_TIMEOUT_MS = 10000;
+const LOAD_TIMEOUT_MS = 30000;
 const SEEK_TIMEOUT_MS = 10000;
 const FRAME_READY_TIMEOUT_MS = 3000;
 
 export class ExtractError extends Error {
-  /** @param {'unsupported'|'too-long'|'aborted'} code */
-  constructor(code, message) {
+  /**
+   * @param {'unsupported'|'too-long'|'aborted'} code
+   * @param {string} [message]
+   * @param {string} [detail] tekninen lisätieto vianmääritystä varten
+   */
+  constructor(code, message, detail) {
     super(message || code);
     this.name = 'ExtractError';
     this.code = code;
+    this.detail = detail || '';
   }
+}
+
+/** Selaimen ilmoittama videovirhe tekstinä, tai annettu varateksti. */
+export function mediaErrorDetail(video, fallback) {
+  const err = video.error;
+  if (err) return `koodi ${err.code}${err.message ? `: ${err.message}` : ''}`;
+  return `${fallback} (verkkotila ${video.networkState}, valmius ${video.readyState})`;
 }
 
 /** Avaa tiedoston piilotettuun videoelementtiin ja odottaa perustiedot. */
@@ -34,24 +46,27 @@ function openVideo(file) {
       video.remove();
       URL.revokeObjectURL(url);
     };
-    const fail = () => {
+    const fail = (detail) => {
       cleanup();
       dispose();
-      reject(new ExtractError('unsupported'));
+      reject(new ExtractError('unsupported', undefined, detail));
     };
+    const onError = () => fail(mediaErrorDetail(video, 'virhe videon avauksessa'));
     const ok = () => {
-      if (!(video.videoWidth > 0) || !Number.isFinite(video.duration) || !(video.duration > 0)) return fail();
+      if (!(video.videoWidth > 0) || !Number.isFinite(video.duration) || !(video.duration > 0)) {
+        return fail(`video ilman kuvaa tai kestoa (leveys ${video.videoWidth}, kesto ${video.duration})`);
+      }
       cleanup();
       resolve({ video, dispose });
     };
-    const timer = setTimeout(fail, LOAD_TIMEOUT_MS);
+    const timer = setTimeout(() => fail(mediaErrorDetail(video, 'aikakatkaisu videon avauksessa')), LOAD_TIMEOUT_MS);
     const cleanup = () => {
       clearTimeout(timer);
       video.removeEventListener('loadedmetadata', ok);
-      video.removeEventListener('error', fail);
+      video.removeEventListener('error', onError);
     };
     video.addEventListener('loadedmetadata', ok);
-    video.addEventListener('error', fail);
+    video.addEventListener('error', onError);
     document.body.appendChild(video);
     video.src = url;
   });
@@ -67,18 +82,19 @@ function seekTo(video, t) {
       cleanup();
       resolve();
     };
-    const fail = () => {
+    const fail = (what) => {
       cleanup();
-      reject(new ExtractError('unsupported'));
+      reject(new ExtractError('unsupported', undefined, mediaErrorDetail(video, `${what} kohtaan ${target.toFixed(1)} s`)));
     };
-    const timer = setTimeout(fail, SEEK_TIMEOUT_MS);
+    const onError = () => fail('virhe kelauksessa');
+    const timer = setTimeout(() => fail('aikakatkaisu kelauksessa'), SEEK_TIMEOUT_MS);
     const cleanup = () => {
       clearTimeout(timer);
       video.removeEventListener('seeked', done);
-      video.removeEventListener('error', fail);
+      video.removeEventListener('error', onError);
     };
     video.addEventListener('seeked', done);
-    video.addEventListener('error', fail);
+    video.addEventListener('error', onError);
     video.currentTime = target;
   });
 }
@@ -126,7 +142,7 @@ export async function probeVideo(file) {
 /**
  * @param {Blob} file
  * @param {{detect(source: HTMLVideoElement): Promise<import('../core/skeleton.js').Landmark[]|null>}} engine
- * @param {{start?: number, end?: number, fps?: number, onProgress?: (done: number, total: number) => void, signal?: AbortSignal}} [opts]
+ * @param {{start?: number, end?: number, fps?: number, onProgress?: (done: number, total: number) => void, onOpen?: (info: {width: number, height: number, duration: number}) => void, signal?: AbortSignal}} [opts]
  * @returns {Promise<import('../core/skeleton.js').Track>}
  */
 export async function extractTrack(file, engine, opts = {}) {
@@ -138,6 +154,7 @@ export async function extractTrack(file, engine, opts = {}) {
   checkAbort();
   const { video, dispose } = await openVideo(file);
   try {
+    opts.onOpen?.({ width: video.videoWidth, height: video.videoHeight, duration: video.duration });
     const requestedEnd = opts.end ?? video.duration;
     if (requestedEnd - start > MAX_CLIP_SECONDS + 1e-6) throw new ExtractError('too-long');
     const end = Math.min(requestedEnd, video.duration);

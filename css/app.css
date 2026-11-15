@@ -246,3 +246,8 @@ progress { width: 100%; height: 12px; accent-color: var(--accent); margin: 8px 0
 .summary-name { font-weight: 600; }
 .summary-value { color: var(--text); text-align: right; }
 .summary-dots { letter-spacing: 2px; color: var(--accent); }
+
+/* Virheen tekninen lisätieto ja vianmäärityksen loki */
+.error-detail { display: block; margin-top: 6px; font-size: 0.8rem; opacity: 0.85; word-break: break-word; }
+.diag-log { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; overflow: auto; resize: vertical; }
+.diag-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }

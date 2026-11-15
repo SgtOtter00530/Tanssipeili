@@ -1,11 +1,12 @@
 // Videon toisto, jonka päälle piirretään tikku-ukot. Käytössä esikatselussa ja analyysin tuloksessa.
-import { ExtractError } from '../pose/extract.js';
+import { ExtractError, mediaErrorDetail } from '../pose/extract.js';
+import { diag } from '../core/diag.js';
 import { h, formatClock } from './dom.js';
 
 /**
  * @param {HTMLElement} container
  * @param {Blob} file
- * @param {{start: number, end: number, overlayId: string, draw: (ctx: CanvasRenderingContext2D, tRel: number, width: number, height: number) => void}} opts
+ * @param {{start: number, end: number, overlayId: string, onError?: (detail: string) => void, draw: (ctx: CanvasRenderingContext2D, tRel: number, width: number, height: number) => void}} opts
  * @returns {Promise<{video: HTMLVideoElement, getTime(): number, seek(tRel: number): void, setMirrored(on: boolean): void, redraw(): void, destroy(): void}>}
  */
 export async function mountStage(container, file, opts) {
@@ -14,21 +15,28 @@ export async function mountStage(container, file, opts) {
   video.playsInline = true;
 
   await new Promise((resolve, reject) => {
-    const fail = () => {
+    const fail = (detail) => {
+      cleanup();
       URL.revokeObjectURL(url);
-      reject(new ExtractError('unsupported'));
+      diag.log('video-virhe', { vaihe: 'toisto', tieto: detail });
+      reject(new ExtractError('unsupported', undefined, detail));
     };
-    const timer = setTimeout(fail, 10000);
-    video.addEventListener('loadedmetadata', () => {
-      clearTimeout(timer);
+    const onError = () => fail(mediaErrorDetail(video, 'virhe videon avauksessa'));
+    const ok = () => {
+      cleanup();
       resolve();
-    }, { once: true });
-    video.addEventListener('error', () => {
+    };
+    const timer = setTimeout(() => fail(mediaErrorDetail(video, 'aikakatkaisu videon avauksessa')), 30000);
+    const cleanup = () => {
       clearTimeout(timer);
-      fail();
-    }, { once: true });
+      video.removeEventListener('loadedmetadata', ok);
+      video.removeEventListener('error', onError);
+    };
+    video.addEventListener('loadedmetadata', ok);
+    video.addEventListener('error', onError);
     video.src = url;
   });
+  diag.log('video-auki', { vaihe: 'toisto', leveys: video.videoWidth, korkeus: video.videoHeight, kesto: video.duration.toFixed(1) });
 
   const width = video.videoWidth;
   const height = video.videoHeight;
@@ -72,16 +80,27 @@ export async function mountStage(container, file, opts) {
   }
 
   const outsideClip = () => video.ended || video.currentTime < start - 0.05 || video.currentTime >= end - 0.02;
+  const videoState = () => ({ kohta: video.currentTime.toFixed(1), valmius: video.readyState, verkkotila: video.networkState, tauolla: video.paused });
+  const tryPlay = (why) => video.play().catch((e) => {
+    diag.log('toisto-estyi', { syy: why, virhe: `${e && e.name}: ${e && e.message}`, ...videoState() });
+  });
   playBtn.addEventListener('click', () => {
+    diag.log('toisto-pyyntö', videoState());
     if (!video.paused) return void video.pause();
     if (outsideClip()) video.currentTime = start; // toisto alkaa aina rajatun pätkän sisältä
-    video.play().catch(() => {});
+    tryPlay('painike');
   });
+  // Harvinaiset tilamuutokset kirjataan, jotta tyhjäksi jäävän videon syy näkyy lokista.
+  for (const type of ['stalled', 'emptied', 'abort']) {
+    video.addEventListener(type, () => {
+      if (!destroyed) diag.log('video-tila', { tapahtuma: type, ...videoState() });
+    });
+  }
   // Kun pätkä ulottuu videon loppuun, selain pysäyttää toiston: aloitetaan pätkä alusta.
   video.addEventListener('ended', () => {
     if (destroyed) return;
     video.currentTime = start;
-    video.play().catch(() => {});
+    tryPlay('silmukka');
   });
   video.addEventListener('play', () => {
     playBtn.textContent = 'Tauko';
@@ -91,6 +110,16 @@ export async function mountStage(container, file, opts) {
   });
   scrub.addEventListener('input', () => {
     video.currentTime = start + Number(scrub.value);
+  });
+  scrub.addEventListener('change', () => diag.log('kelaus', { kohteeseen: scrub.value, ...videoState() }));
+
+  // Toisto voi katketa vielä avaamisen jälkeen (esim. laitteen videopurkaja tai grafiikkamuisti loppuu).
+  // Ilman tätä video jäisi tyhjäksi ilman mitään selitystä.
+  video.addEventListener('error', () => {
+    if (destroyed) return;
+    const detail = mediaErrorDetail(video, 'virhe toiston aikana');
+    diag.log('video-virhe', { vaihe: 'toisto', tieto: detail, kohta: relTime().toFixed(1) });
+    opts.onError?.(detail);
   });
 
   video.currentTime = Math.max(start, 0.001);

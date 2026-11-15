@@ -1,6 +1,7 @@
 // Asetukset: palautteen tarkkuus ja tietoa sovelluksen rajoista.
 import { COPY } from './copy.js';
 import { h } from './dom.js';
+import { diag } from '../core/diag.js';
 
 const OPTIONS = [
   { value: 'salliva', label: 'Salliva', hint: 'Pienet erot hyväksytään. Hyvä uutta liikettä opetellessa.' },
@@ -50,5 +51,37 @@ export async function render(root, ctx) {
       h('h2', { text: 'Yksityisyys' }),
       h('p', { text: COPY.privacy }),
     ),
+    diagSection(),
+  );
+}
+
+function diagSection() {
+  const area = h('textarea', { id: 'diag-log', class: 'input diag-log', readonly: true, rows: 8, 'aria-label': 'Vianmäärityksen loki' });
+  const status = h('span', { class: 'hint', role: 'status' });
+  const refresh = () => {
+    area.value = diag.format() || 'Loki on tyhjä.';
+  };
+  refresh();
+  const copy = h('button', { type: 'button', class: 'btn', onClick: async () => {
+    try {
+      await navigator.clipboard.writeText(area.value);
+      status.textContent = 'Kopioitu.';
+    } catch {
+      // Jos leikepöytä ei ole käytettävissä, valitaan teksti käsin kopioitavaksi.
+      area.focus();
+      area.select();
+      status.textContent = 'Valitse Kopioi puhelimen valikosta.';
+    }
+  } }, 'Kopioi loki');
+  const clear = h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => {
+    diag.clear();
+    refresh();
+    status.textContent = 'Tyhjennetty.';
+  } }, 'Tyhjennä loki');
+  return h('section', {},
+    h('h2', { text: 'Vianmääritys' }),
+    h('p', { class: 'hint', text: COPY.diagIntro }),
+    area,
+    h('div', { class: 'diag-actions' }, copy, clear, status),
   );
 }

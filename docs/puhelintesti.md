@@ -6,6 +6,14 @@ Osoite: https://sgtotter00530.github.io/Tanssipeili/
 
 Kirjaa jokaisen kohdan perään, mitä tapahtui. Pelkkä "toimi" tai "ei toiminut" riittää, mutta tarkempi kuvaus auttaa korjaamisessa.
 
+## Jos jokin ei toimi
+
+1. Kirjoita muistiin virheilmoitus ja sen alla oleva rivi "Tekninen tieto".
+2. Avaa Asetukset ja vieritä kohtaan Vianmääritys.
+3. Paina Kopioi loki ja liitä teksti viestiin.
+
+Loki pysyy puhelimessa, kunnes kopioit sen itse. Siinä ei ole videokuvaa eikä tiedostojen nimiä. Siinä on puhelimen ja selaimen tyyppi, videoiden koko ja tarkkuus, käsittelyajat ja virheet.
+
 ## Perustiedot
 
 - Puhelimen malli:
