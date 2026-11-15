@@ -1,7 +1,7 @@
 # Tanssipeili – suunnitelma
 
 Päiväys: 15.11.2026
-Tila: odottaa hyväksyntää
+Tila: hyväksytty 15.11.2026
 
 ## 1. Tarkoitus
 
@@ -106,7 +106,7 @@ Luonnos analyysinäkymästä:
 
 - Kirjasto (liikeradat, nimet, lajit, asetukset) tallennetaan selaimen tietokantaan puhelimessa.
 - Omien suoritusten videoita ei tallenneta sovellukseen. Käyttäjän kuvaama video jää puhelimen omaan galleriaan sen mukaan, miten hän sen kuvaa.
-- **Avoin kohta:** tallennetaanko myös mallivideo puhelimeen liikeradan lisäksi. Katso kohta 10.
+- Mallivideo tallennetaan puhelimeen liikeradan lisäksi, jos käyttäjä ei poista valintaa mallia lisätessään. Katso kohta 10.
 
 ### 7.6 Tekninen rakenne
 
@@ -137,9 +137,9 @@ Vaiheen 1 jälkeen pysähdytään katsomaan, onko vertailu oikealla tanssivideol
 
 ## 10. Avoimet kohdat ja tehdyt valinnat
 
-**Käyttäjän päätettävä:**
+**Päätetty hyväksynnän yhteydessä:**
 
-- Tallennetaanko mallivideo puhelimeen liikeradan lisäksi? Suositus: kyllä, valinnaisena. Ilman videota reaaliaikatilassa ei kuulu mallin musiikkia, jolloin tahdissa pysyminen pelkän tikku-ukon perusteella on vaikeaa. Video ei tässäkään poistu laitteesta, mutta se vie puhelimen tallennustilaa.
+- Mallivideo tallennetaan puhelimeen liikeradan lisäksi, valinnaisena ja oletuksena päällä (suositus hyväksyttiin suunnitelman mukana). Ilman videota reaaliaikatilassa ei kuulu mallin musiikkia, jolloin tahdissa pysyminen pelkän tikku-ukon perusteella on vaikeaa. Video ei tässäkään poistu laitteesta, mutta se vie puhelimen tallennustilaa.
 
 **Rakentajan valinnat (ei käyttäjän päättämiä):**
 
