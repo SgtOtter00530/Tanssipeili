@@ -144,7 +144,11 @@ function idbStore(db) {
       return { ...DEFAULT_SETTINGS, ...(saved || {}) };
     },
     saveSettings(settings) {
-      return withTx(db, ['settings'], 'readwrite', (tx) => void tx.objectStore('settings').put({ ...settings }, 'settings'));
+      return withTx(db, ['settings'], 'readwrite', (tx) => {
+        tx.objectStore('settings').put({ ...settings }, 'settings');
+        // Vahvistetaan heti, jotta asetus ehtii talteen, vaikka sivu suljettaisiin saman tien.
+        tx.commit?.();
+      });
     },
   };
 }
