@@ -2,6 +2,7 @@
 import { COPY } from './copy.js';
 import { h } from './dom.js';
 import { diag } from '../core/diag.js';
+import { VERSION } from '../version.js';
 
 const OPTIONS = [
   { value: 'salliva', label: 'Salliva', hint: 'Pienet erot hyväksytään. Hyvä uutta liikettä opetellessa.' },
@@ -80,6 +81,7 @@ function diagSection() {
   } }, 'Tyhjennä loki');
   return h('section', {},
     h('h2', { text: 'Vianmääritys' }),
+    h('p', { id: 'app-version', class: 'hint', text: `Versio ${VERSION}` }),
     h('p', { class: 'hint', text: COPY.diagIntro }),
     area,
     h('div', { class: 'diag-actions' }, copy, clear, status),

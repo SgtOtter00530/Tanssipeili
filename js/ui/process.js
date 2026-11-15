@@ -3,6 +3,7 @@ import { extractTrack, ExtractError } from '../pose/extract.js';
 import { StoreFullError } from '../store/db.js';
 import { diag } from '../core/diag.js';
 import { sniffVideo, describeSniff } from '../core/sniff.js';
+import { stashFile, clearScratch, scratchNameOf, SourceReadError } from '../store/scratch.js';
 import { COPY } from './copy.js';
 import { h, setChildren } from './dom.js';
 
@@ -17,6 +18,7 @@ export function errorText(e) {
     if (e.code === 'too-long') return COPY.tooLong;
   }
   if (e instanceof StoreFullError) return COPY.storeFull;
+  if (e instanceof SourceReadError) return COPY.readFailed;
   if (e && e.userMessage) return e.userMessage;
   return COPY.genericError;
 }
@@ -69,7 +71,7 @@ export async function describeFile(file) {
   return text;
 }
 
-/** Kirjaa valitun tiedoston tyypin, koon ja sisällön sekä selaimen toistokyvyn. Nimeä ei kirjata. */
+/** Kirjaa valitun tiedoston tyypin ja koon sekä selaimen toistokyvyn. Nimeä ei kirjata. */
 export function logChosenFile(file, purpose) {
   diag.log('video-valittu', { käyttö: purpose, tyyppi: file.type || 'tuntematon', 'koko-mt': (file.size / (1024 * 1024)).toFixed(1) });
   if (!playSupportLogged) {
@@ -79,7 +81,31 @@ export function logChosenFile(file, purpose) {
     for (const [name, type] of Object.entries(PLAY_TYPES)) support[name] = probe.canPlayType(type) || 'ei';
     diag.log('toistokyky', support);
   }
-  return describeFile(file);
+}
+
+/**
+ * Tekee valitusta videosta työkopion ja näyttää sen ajan etenemisen. Kaikki myöhempi käyttö
+ * (rajaus, käsittely, toisto, tallennus) tapahtuu kopiosta, ei puhelimen antamasta alkuperäisestä viittauksesta.
+ * @param {HTMLElement} body
+ * @param {{state: {analysis?: {file: Blob}|null}}} ctx
+ * @param {File} picked
+ * @param {string} purpose
+ * @returns {Promise<File>}
+ */
+export async function openChosenFile(body, ctx, picked, purpose) {
+  const progress = h('progress', { 'aria-label': 'Videon avaamisen eteneminen' });
+  setChildren(body, h('h2', { text: 'Avataan videota' }), progress, h('p', { class: 'hint', role: 'status', text: 'Video kopioidaan sovelluksen käyttöön tässä puhelimessa.' }));
+  logChosenFile(picked, purpose);
+  // Aiemmat työkopiot poistetaan, paitsi se, jota näkyvissä pidettävä analyysin tulos vielä käyttää.
+  await clearScratch([scratchNameOf(ctx.state?.analysis?.file)]);
+  const stash = await stashFile(picked, {
+    onProgress(done, total) {
+      progress.max = total;
+      progress.value = done;
+    },
+  });
+  describeFile(stash.file); // kirjaa lokiin säiliön ja koodekit
+  return stash.file;
 }
 
 /**

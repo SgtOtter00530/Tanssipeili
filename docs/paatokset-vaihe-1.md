@@ -16,6 +16,8 @@ Päiväys: 15.11.2026
 8. **Videon tallennus on oletuksena pois päältä, jos tiedosto on yli 150 Mt**, ja tiedoston koko näytetään valinnan yhteydessä.
 9. **Sanallista hetkikohtaista palautetta ("vasen käsi oli mallia alempana") ei rakennettu.** Palaute on värit, aikajana ja neljä yhteenvetoriviä. Jos väärin: käyttäjä kaipaa raajakohtaista sanamuotoa. Sopii vaiheeseen 2.
 
+10. **Valitusta videosta tehdään työkopio sovelluksen omaan tallennustilaan** (lisätty ensimmäisen puhelintestin jälkeen). Xiaomin Android-puhelimessa Chrome lakkasi lukemasta valittua tiedostoa kesken käytön (`MEDIA_ELEMENT_ERROR: Format error`). Alkuperäinen päätös oli, ettei omaa videota tallenneta sovellukseen lainkaan. Nyt viimeisin työkopio on laitteessa siihen asti, kun valitaan uusi video tai sovellus avataan uudelleen. Jos väärin: korjaus ei auta, jos puhelin ei anna lukea tiedostoa edes ensimmäisellä kerralla; silloin sovellus sanoo sen suoraan.
+
 ## 2. Varmentamatta jääneet korjaukset
 
 Nämä tehtiin tarkastuksen perusteella, mutta niitä ei voitu todentaa tietokoneen selaimella.

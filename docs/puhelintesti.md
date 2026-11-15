@@ -6,6 +6,10 @@ Osoite: https://sgtotter00530.github.io/Tanssipeili/
 
 Kirjaa jokaisen kohdan perään, mitä tapahtui. Pelkkä "toimi" tai "ei toiminut" riittää, mutta tarkempi kuvaus auttaa korjaamisessa.
 
+## Ennen testiä
+
+Avaa Asetukset ja katso kohdasta Vianmääritys sovelluksen versio. Selain voi näyttää vanhaa versiota noin 10 minuuttia päivityksen jälkeen. Jos versio on vanha, odota hetki ja lataa sivu uudelleen.
+
 ## Jos jokin ei toimi
 
 1. Kirjoita muistiin virheilmoitus ja sen alla oleva rivi "Tekninen tieto".

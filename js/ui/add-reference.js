@@ -10,7 +10,7 @@ import { COPY } from './copy.js';
 import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, logChosenFile, describeFile, MIN_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, MIN_DETECTED_SHARE } from './process.js';
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -22,6 +22,7 @@ export async function render(root, ctx) {
 
   let trim = null;
   let stage = null;
+  let sourceName = 'Malli'; // valitun tiedoston nimi ilman päätettä, mallin oletusnimeksi
   const running = { abort: null };
   let disposed = false;
 
@@ -38,7 +39,7 @@ export async function render(root, ctx) {
     const input = h('input', { type: 'file', id: 'ref-file', accept: 'video/*', class: 'visually-hidden' });
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) stepTrim(file, null, logChosenFile(file, 'malli'));
+      if (file) stepOpen(file);
     });
     setChildren(body, h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
       h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
@@ -46,14 +47,31 @@ export async function render(root, ctx) {
     );
   }
 
-  /** @param {Promise<string>} [fileInfo] tiedoston sisällön kuvaus virheilmoitusta varten */
-  async function stepTrim(file, initial, fileInfo) {
+  /** Tekee valitusta videosta työkopion. Jos tiedostoa ei saa luettua, palataan valintaan. */
+  async function stepOpen(picked) {
+    dispose();
+    showError('');
+    let file;
+    try {
+      file = await openChosenFile(body, ctx, picked, 'malli');
+    } catch (e) {
+      if (disposed) return;
+      stepPick();
+      showError(errorText(e), errorDetail(e));
+      return;
+    }
+    if (disposed) return;
+    sourceName = (picked.name || 'Malli').replace(/\.[^.]+$/, '');
+    await stepTrim(file, null);
+  }
+
+  async function stepTrim(file, initial) {
     dispose();
     const holder = h('div', {});
     try {
       trim = await mountTrim(holder, file, { maxSeconds: MAX_CLIP_SECONDS, initial: initial || undefined });
     } catch (e) {
-      const info = await (fileInfo || describeFile(file)).catch(() => '');
+      const info = await describeFile(file).catch(() => '');
       if (disposed) return;
       stepPick();
       showError(errorText(e), [errorDetail(e), info].filter(Boolean).join(' · '));
@@ -93,7 +111,7 @@ export async function render(root, ctx) {
     let mirrored = false;
 
     const holder = h('div', {});
-    const nameInput = h('input', { type: 'text', id: 'ref-name', class: 'input', maxlength: 40, autocomplete: 'off', value: (file.name || 'Malli').replace(/\.[^.]+$/, '') });
+    const nameInput = h('input', { type: 'text', id: 'ref-name', class: 'input', maxlength: 40, autocomplete: 'off', value: sourceName });
     const styleSelect = h('select', { id: 'ref-style', class: 'input' },
       ...styles.map((s) => h('option', { value: s.id, selected: s.id === defaultStyle }, s.name)));
     const mirrorBox = h('input', { type: 'checkbox', id: 'ref-mirror' });

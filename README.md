@@ -10,6 +10,8 @@ Videot ja liikeradat pysyvät tässä puhelimessa. Sovellus ei lähetä mitään
 
 Asennontunnistuksen malli ja kaikki muu koodi tarjoillaan tästä reposta. Sivu ei tee ajon aikana pyyntöjä muihin osoitteisiin, eikä siinä ole analytiikkaa. Sivun sisältökäytäntö (CSP) estää selaimessa yhteydet muualle, ja tämä varmistetaan automaattisissa testeissä.
 
+Valitusta videosta tehdään työkopio sovelluksen omaan tallennustilaan samassa laitteessa, koska osa puhelimista ei anna selaimen lukea samaa tiedostoa toistamiseen. Työkopio poistetaan, kun valitaan uusi video tai sovellus avataan uudelleen. Oman suorituksen video ei siis jää pysyvästi sovellukseen, mutta viimeisin työkopio on tallessa seuraavaan avaukseen asti.
+
 Asetuksissa on vianmäärityksen loki. Sekin pysyy laitteessa: käyttäjä kopioi sen itse, jos haluaa lähettää sen eteenpäin.
 
 ## Mitä vaihe 1 sisältää

@@ -3,6 +3,8 @@ import { openStore } from './store/db.js';
 import { createEngine } from './pose/engine.js';
 import { COPY } from './ui/copy.js';
 import { diag } from './core/diag.js';
+import { clearScratch } from './store/scratch.js';
+import { VERSION } from './version.js';
 
 /** @typedef {{store: any, navigate(hash: string, params?: object): void, getEngine(): Promise<any>, resetEngine(): void, params: Record<string, any>, state: Record<string, any>}} AppContext */
 
@@ -107,7 +109,9 @@ document.addEventListener('visibilitychange', () => diag.log('näkyvyys', { tila
 
 async function start() {
   ctx.store = await openStore();
+  clearScratch(); // edellisen käyttökerran työkopiot pois
   diag.log('käynnistys', {
+    versio: VERSION,
     selain: navigator.userAgent,
     näkymä: `${window.innerWidth}x${window.innerHeight}`,
     dpr: window.devicePixelRatio,

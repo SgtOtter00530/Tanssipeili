@@ -9,7 +9,7 @@ import { COPY } from './copy.js';
 import { h, formatDuration, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, logChosenFile, describeFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, openChosenFile, describeFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
 
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
@@ -76,7 +76,7 @@ export async function render(root, ctx) {
     dispose();
     const onFile = (input) => input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) stepTrim(ref, file, null, logChosenFile(file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria'));
+      if (file) stepOpen(ref, file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria');
     });
     const camera = h('input', { type: 'file', id: 'pick-camera', accept: 'video/*', capture: 'environment', class: 'visually-hidden' });
     const gallery = h('input', { type: 'file', id: 'pick-gallery', accept: 'video/*', class: 'visually-hidden' });
@@ -93,14 +93,30 @@ export async function render(root, ctx) {
     );
   }
 
-  /** @param {Promise<string>} [fileInfo] tiedoston sisällön kuvaus virheilmoitusta varten */
-  async function stepTrim(ref, file, initial, fileInfo) {
+  /** Tekee valitusta videosta työkopion. Jos tiedostoa ei saa luettua, palataan valintaan. */
+  async function stepOpen(ref, picked, purpose) {
+    dispose();
+    showError('');
+    let file;
+    try {
+      file = await openChosenFile(body, ctx, picked, purpose);
+    } catch (e) {
+      if (disposed) return;
+      stepPickVideo(ref);
+      showError(errorText(e), errorDetail(e));
+      return;
+    }
+    if (disposed) return;
+    await stepTrim(ref, file, null);
+  }
+
+  async function stepTrim(ref, file, initial) {
     dispose();
     const holder = h('div', {});
     try {
       trim = await mountTrim(holder, file, { maxSeconds: MAX_CLIP_SECONDS, initial: initial || undefined });
     } catch (e) {
-      const info = await (fileInfo || describeFile(file)).catch(() => '');
+      const info = await describeFile(file).catch(() => '');
       if (disposed) return;
       stepPickVideo(ref);
       showError(errorText(e), [errorDetail(e), info].filter(Boolean).join(' · '));
