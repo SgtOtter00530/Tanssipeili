@@ -121,6 +121,7 @@ await runTests('robustness', {
       await visible(page, COPY.unsupported);
       const detail = await page.locator('.error-detail').textContent();
       assert.match(detail, /^Tekninen tieto: .*(koodi|aikakatkaisu)/, detail);
+      assert.match(detail, /tiedosto luettavissa, säiliö tuntematon/, detail);
       // onnistunut käsittely ja sen jälkeen toiston katkeaminen kesken esikatselun
       await page.locator('#ref-file').setInputFiles(fixture('pose_squats.mp4'));
       await page.getByRole('button', { name: 'Jatka' }).waitFor();
@@ -148,6 +149,8 @@ await runTests('robustness', {
       assert.match(log, /video-auki vaihe=toisto leveys=720/);
       assert.match(log, /toisto-pyyntö kohta=[\d.]+ valmius=\d verkkotila=\d tauolla=true/);
       assert.match(log, /video-valittu käyttö=malli tyyppi=video\/mp4 koko-mt=0\.5/);
+      assert.match(log, /tiedosto-tieto luku=ok sisältö=mp4 \(\w+\), koodekit avc1/);
+      assert.match(log, /toistokyky .*h264=/);
       assert.match(log, /näyttölukko tila=/);
       assert.doesNotMatch(log, /pose_squats|not-a-video/, 'tiedostojen nimiä ei kirjata');
       assert.equal(await page.getByRole('button', { name: 'Kopioi loki' }).count(), 1);

@@ -9,7 +9,7 @@ import { COPY } from './copy.js';
 import { h, formatDuration, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, logChosenFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, logChosenFile, describeFile, MIN_DETECTED_SHARE, PARTLY_DETECTED_SHARE } from './process.js';
 
 const GROUP_NAMES = [['arms', 'Kädet'], ['legs', 'Jalat'], ['core', 'Vartalo']];
 /** Aikajanan palkki on täysikorkea, kun keskimääräinen ero on tämän verran asteita. */
@@ -76,10 +76,7 @@ export async function render(root, ctx) {
     dispose();
     const onFile = (input) => input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) {
-        logChosenFile(file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria');
-        stepTrim(ref, file, null);
-      }
+      if (file) stepTrim(ref, file, null, logChosenFile(file, input.id === 'pick-camera' ? 'oma-kamera' : 'oma-galleria'));
     });
     const camera = h('input', { type: 'file', id: 'pick-camera', accept: 'video/*', capture: 'environment', class: 'visually-hidden' });
     const gallery = h('input', { type: 'file', id: 'pick-gallery', accept: 'video/*', class: 'visually-hidden' });
@@ -96,15 +93,17 @@ export async function render(root, ctx) {
     );
   }
 
-  async function stepTrim(ref, file, initial) {
+  /** @param {Promise<string>} [fileInfo] tiedoston sisällön kuvaus virheilmoitusta varten */
+  async function stepTrim(ref, file, initial, fileInfo) {
     dispose();
     const holder = h('div', {});
     try {
       trim = await mountTrim(holder, file, { maxSeconds: MAX_CLIP_SECONDS, initial: initial || undefined });
     } catch (e) {
+      const info = await (fileInfo || describeFile(file)).catch(() => '');
       if (disposed) return;
       stepPickVideo(ref);
-      showError(errorText(e), errorDetail(e));
+      showError(errorText(e), [errorDetail(e), info].filter(Boolean).join(' · '));
       return;
     }
     if (disposed) return void dispose();

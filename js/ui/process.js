@@ -2,6 +2,7 @@
 import { extractTrack, ExtractError } from '../pose/extract.js';
 import { StoreFullError } from '../store/db.js';
 import { diag } from '../core/diag.js';
+import { sniffVideo, describeSniff } from '../core/sniff.js';
 import { COPY } from './copy.js';
 import { h, setChildren } from './dom.js';
 
@@ -36,9 +37,49 @@ export function setError(box, text, detail) {
   box.hidden = !text;
 }
 
-/** Kirjaa valitun tiedoston tyypin ja koon. Nimeä ei kirjata. */
+const SNIFF_BYTES = 2 * 1024 * 1024;
+const PLAY_TYPES = {
+  h264: 'video/mp4; codecs="avc1.640028"',
+  hevc: 'video/mp4; codecs="hvc1.1.6.L120.90"',
+  'hevc-10bit': 'video/mp4; codecs="hvc1.2.4.L120.90"',
+  av1: 'video/mp4; codecs="av01.0.08M.08"',
+  vp9: 'video/webm; codecs="vp09.00.40.08"',
+};
+let playSupportLogged = false;
+
+/**
+ * Selvittää, saako tiedoston luettua ja mitä se sisältää (säiliö ja koodekit).
+ * Kun selain ei avaa videota, tästä näkee, onko syy tiedoston lukemisessa vai sen muodossa.
+ * @param {Blob} file
+ * @returns {Promise<string>} tiivis kuvaus
+ */
+export async function describeFile(file) {
+  let text;
+  try {
+    const head = new Uint8Array(await file.slice(0, SNIFF_BYTES).arrayBuffer());
+    const tail = file.size > SNIFF_BYTES ? new Uint8Array(await file.slice(Math.max(0, file.size - SNIFF_BYTES)).arrayBuffer()) : head;
+    const content = describeSniff(sniffVideo(head, tail));
+    diag.log('tiedosto-tieto', { luku: 'ok', sisältö: content });
+    text = `tiedosto luettavissa, ${content}`;
+  } catch (e) {
+    const why = `${e && e.name}: ${e && e.message}`;
+    diag.log('tiedosto-tieto', { luku: 'virhe', virhe: why });
+    text = `tiedoston luku ei onnistunut (${why})`;
+  }
+  return text;
+}
+
+/** Kirjaa valitun tiedoston tyypin, koon ja sisällön sekä selaimen toistokyvyn. Nimeä ei kirjata. */
 export function logChosenFile(file, purpose) {
   diag.log('video-valittu', { käyttö: purpose, tyyppi: file.type || 'tuntematon', 'koko-mt': (file.size / (1024 * 1024)).toFixed(1) });
+  if (!playSupportLogged) {
+    playSupportLogged = true;
+    const probe = document.createElement('video');
+    const support = {};
+    for (const [name, type] of Object.entries(PLAY_TYPES)) support[name] = probe.canPlayType(type) || 'ei';
+    diag.log('toistokyky', support);
+  }
+  return describeFile(file);
 }
 
 /**

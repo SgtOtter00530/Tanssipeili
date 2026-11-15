@@ -10,7 +10,7 @@ import { COPY } from './copy.js';
 import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-import { runExtraction, errorText, errorDetail, setError, logChosenFile, MIN_DETECTED_SHARE } from './process.js';
+import { runExtraction, errorText, errorDetail, setError, logChosenFile, describeFile, MIN_DETECTED_SHARE } from './process.js';
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -38,10 +38,7 @@ export async function render(root, ctx) {
     const input = h('input', { type: 'file', id: 'ref-file', accept: 'video/*', class: 'visually-hidden' });
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
-      if (file) {
-        logChosenFile(file, 'malli');
-        stepTrim(file, null);
-      }
+      if (file) stepTrim(file, null, logChosenFile(file, 'malli'));
     });
     setChildren(body, h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
       h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
@@ -49,15 +46,17 @@ export async function render(root, ctx) {
     );
   }
 
-  async function stepTrim(file, initial) {
+  /** @param {Promise<string>} [fileInfo] tiedoston sisällön kuvaus virheilmoitusta varten */
+  async function stepTrim(file, initial, fileInfo) {
     dispose();
     const holder = h('div', {});
     try {
       trim = await mountTrim(holder, file, { maxSeconds: MAX_CLIP_SECONDS, initial: initial || undefined });
     } catch (e) {
+      const info = await (fileInfo || describeFile(file)).catch(() => '');
       if (disposed) return;
       stepPick();
-      showError(errorText(e), errorDetail(e));
+      showError(errorText(e), [errorDetail(e), info].filter(Boolean).join(' · '));
       return;
     }
     if (disposed) return void dispose();
