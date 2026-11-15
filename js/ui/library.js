@@ -1,6 +1,6 @@
 // Kirjasto: lajit kansioina ja niiden alla tallennetut mallit.
 import { COPY } from './copy.js';
-import { h, formatDuration, newId } from './dom.js';
+import { h, formatDuration, newId, setChildren } from './dom.js';
 import { confirmDialog, promptDialog } from './dialog.js';
 
 const PROTECTED_STYLE = 'muu';
@@ -28,8 +28,7 @@ export async function render(root, ctx) {
     if (!styles.some((s) => s.id === ctx.state.styleId)) ctx.state.styleId = styles[0]?.id || PROTECTED_STYLE;
     const current = styles.find((s) => s.id === ctx.state.styleId);
 
-    chipRow.replaceChildren(
-      ...styles.map((s) => h('button', {
+    setChildren(chipRow, ...styles.map((s) => h('button', {
         type: 'button', class: 'chip', 'data-style': s.id, 'aria-pressed': String(s.id === current.id),
         onClick: () => {
           ctx.state.styleId = s.id;
@@ -39,8 +38,7 @@ export async function render(root, ctx) {
       h('button', { type: 'button', class: 'chip chip-add', 'aria-label': 'Lisää laji', onClick: addStyle }, '+ Laji'),
     );
 
-    styleActions.replaceChildren(
-      h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => renameStyle(current) }, 'Nimeä uudelleen'),
+    setChildren(styleActions, h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => renameStyle(current) }, 'Nimeä uudelleen'),
       current.id !== PROTECTED_STYLE
         ? h('button', { type: 'button', class: 'btn btn-quiet', onClick: () => removeStyle(current) }, 'Poista laji')
         : null,
@@ -48,10 +46,10 @@ export async function render(root, ctx) {
 
     const refs = await store.listReferences(current.id);
     if (!refs.length) {
-      list.replaceChildren(h('p', { class: 'empty', text: COPY.emptyStyle }));
+      setChildren(list, h('p', { class: 'empty', text: COPY.emptyStyle }));
       return;
     }
-    list.replaceChildren(...refs.map((r) => h('article', { class: 'ref-card' },
+    setChildren(list, ...refs.map((r) => h('article', { class: 'ref-card' },
       h('div', { class: 'ref-info' },
         h('h2', { text: r.name }),
         h('p', { class: 'meta' },

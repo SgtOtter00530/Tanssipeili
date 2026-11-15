@@ -15,6 +15,7 @@ const OUTLINE = 'rgba(0,0,0,0.4)';
 // Väri ei ole ainoa vihje: mitä suurempi ero, sitä paksumpi viiva.
 const WIDTH_FACTOR = { green: 1, yellow: 1.3, red: 1.6, unknown: 1 };
 const SEVERITY = { green: 1, yellow: 2, red: 3 };
+const GHOST_WIDTH = 3;
 
 const JOINTS = [
   LM.NOSE, LM.L_SHOULDER, LM.R_SHOULDER, LM.L_ELBOW, LM.R_ELBOW, LM.L_WRIST, LM.R_WRIST,
@@ -57,7 +58,8 @@ export function drawSkeleton(ctx, lm, opts) {
     const b = toPx(point(lm, seg.to));
     const visible = a.v >= MIN_VIS && b.v >= MIN_VIS;
     if (ghost) {
-      if (visible) line(ctx, a, b, COLORS.ghost, base, false);
+      // Malli piirretään leveänä nauhana, jotta se näkyy oman ukon takaa silloinkin, kun asennot osuvat kohdakkain.
+      if (visible) line(ctx, a, b, COLORS.ghost, base * GHOST_WIDTH, false);
       return;
     }
     // Oma ukko: epävarma tai arvioimaton segmentti on aina harmaa katkoviiva.
@@ -80,7 +82,7 @@ export function drawSkeleton(ctx, lm, opts) {
     const p = toPx(lm[j]);
     const r = base * (j === LM.NOSE ? 2.2 : 1.2);
     if (ghost) {
-      if (p.v >= MIN_VIS) disc(ctx, p, r * 0.8, COLORS.ghost);
+      if (p.v >= MIN_VIS && j === LM.NOSE) disc(ctx, p, r * 1.5, COLORS.ghost);
       continue;
     }
     let level = null;

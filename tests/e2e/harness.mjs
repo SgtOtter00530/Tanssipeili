@@ -17,7 +17,7 @@ export async function withPage(fn, opts = {}) {
   const server = await startServer(ROOT, 0);
   const browser = await chromium.launch({
     ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
-    args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'],
+    args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required', '--disable-background-networking', '--disable-sync', '--no-first-run'],
   });
   try {
     const context = await browser.newContext({ viewport: opts.viewport || { width: 390, height: 844 } });

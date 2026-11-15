@@ -1,63 +1,13 @@
 // Mallin lisäys: videon valinta, rajaus, käsittely, esikatselu ja tallennus.
-import { extractTrack, ExtractError, MAX_CLIP_SECONDS } from '../pose/extract.js';
+import { MAX_CLIP_SECONDS } from '../pose/extract.js';
 import { mirrorTrack } from '../core/track.js';
 import { mirrorLandmarks } from '../core/skeleton.js';
 import { drawSkeleton } from '../render/overlay.js';
-import { StoreFullError } from '../store/db.js';
 import { COPY } from './copy.js';
-import { h, newId } from './dom.js';
+import { h, newId, setChildren } from './dom.js';
 import { mountTrim } from './trim.js';
 import { mountStage } from './stage.js';
-
-/** Tätä pienemmällä tunnistusosuudella videota ei hyväksytä malliksi. */
-export const MIN_DETECTED_SHARE = 0.3;
-
-export function errorText(e) {
-  if (e instanceof ExtractError) {
-    if (e.code === 'unsupported') return COPY.unsupported;
-    if (e.code === 'too-long') return COPY.tooLong;
-  }
-  if (e instanceof StoreFullError) return COPY.storeFull;
-  return COPY.genericError;
-}
-
-/** Käsittelyvaiheen näkymä: etenemispalkki ja peruutus. Palauttaa liikeradan tai null, jos käyttäjä perui. */
-export async function runExtraction(body, ctx, file, range, signalHolder) {
-  const controller = new AbortController();
-  signalHolder.abort = () => controller.abort();
-  const progress = h('progress', { 'aria-label': 'Käsittelyn eteneminen' });
-  const status = h('p', { class: 'hint', role: 'status', text: 'Käynnistetään tunnistusta…' });
-  body.replaceChildren(
-    h('h2', { text: 'Käsitellään videota' }),
-    progress,
-    status,
-    h('p', { class: 'hint', text: 'Pidä tämä sivu auki. Käsittely tapahtuu puhelimessasi ja voi kestää hetken.' }),
-    h('button', { type: 'button', class: 'btn btn-block', onClick: () => controller.abort() }, 'Peruuta'),
-  );
-  try {
-    let engine;
-    try {
-      engine = await ctx.getEngine();
-    } catch {
-      throw new Error(COPY.engineFailed);
-    }
-    return await extractTrack(file, engine, {
-      start: range.start,
-      end: range.end,
-      signal: controller.signal,
-      onProgress(done, total) {
-        progress.max = total;
-        progress.value = done;
-        status.textContent = `Käsitelty ${done} / ${total} kuvaa`;
-      },
-    });
-  } catch (e) {
-    if (e instanceof ExtractError && e.code === 'aborted') return null;
-    throw e;
-  } finally {
-    signalHolder.abort = null;
-  }
-}
+import { runExtraction, errorText, MIN_DETECTED_SHARE } from './process.js';
 
 /** @param {HTMLElement} root @param {import('../app.js').AppContext} ctx */
 export async function render(root, ctx) {
@@ -90,8 +40,7 @@ export async function render(root, ctx) {
       const file = input.files && input.files[0];
       if (file) stepTrim(file, null);
     });
-    body.replaceChildren(
-      h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
+    setChildren(body, h('p', { text: 'Valitse video, jota haluat käyttää mallina. Sovellus poimii siitä tanssijan liikkeet.' }),
       h('label', { class: 'btn btn-primary btn-block file-btn' }, input, 'Valitse video'),
       h('p', { class: 'hint', text: COPY.privacy }),
     );
@@ -110,8 +59,7 @@ export async function render(root, ctx) {
     }
     if (disposed) return void dispose();
     showError('');
-    body.replaceChildren(
-      h('h2', { text: 'Rajaa mallin pätkä' }),
+    setChildren(body, h('h2', { text: 'Rajaa mallin pätkä' }),
       h('p', { class: 'hint', text: 'Valitse kohta, jossa tanssi alkaa ja loppuu.' }),
       holder,
       h('button', { type: 'button', class: 'btn btn-primary btn-block', onClick: () => stepProcess(file, trim.getRange()) }, 'Jatka'),
@@ -128,7 +76,7 @@ export async function render(root, ctx) {
     } catch (e) {
       if (disposed) return;
       await stepTrim(file, range);
-      showError(e instanceof ExtractError ? errorText(e) : e.message || COPY.genericError);
+      showError(errorText(e));
       return;
     }
     if (disposed) return;
@@ -155,8 +103,7 @@ export async function render(root, ctx) {
     };
     nameInput.addEventListener('input', syncSave);
 
-    body.replaceChildren(
-      h('h2', { text: 'Esikatselu' }),
+    setChildren(body, h('h2', { text: 'Esikatselu' }),
       usable ? null : h('p', { class: 'notice notice-error', text: COPY.noPerson }),
       holder,
       h('label', { class: 'option', for: 'ref-mirror' }, mirrorBox,

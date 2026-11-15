@@ -40,3 +40,8 @@ export function newId() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
   return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
+
+/** Korvaa elementin sisällön. Tyhjät arvot (null, undefined, false) ohitetaan, toisin kuin replaceChildren-kutsussa. */
+export function setChildren(el, ...children) {
+  el.replaceChildren(...children.flat().filter((c) => c !== null && c !== undefined && c !== false));
+}

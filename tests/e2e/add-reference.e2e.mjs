@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { withPage, runTests, fixture } from './harness.mjs';
-import { visible, setTrim, canvasHasColor, waitForDrawing, addReference, storedReference } from './flows.mjs';
+import { visible, setTrim, canvasHasColor, waitForDrawing, addReference, storedReference, strayTextNodes } from './flows.mjs';
 import { COPY } from '../../js/ui/copy.js';
 
 await runTests('add-reference', {
@@ -22,6 +22,7 @@ await runTests('add-reference', {
       await page.getByRole('heading', { name: 'Esikatselu' }).waitFor({ timeout: 240000 });
       await waitForDrawing(page, '#preview-overlay', 500); // tikku-ukko piirtyy esikatseluun
       assert.equal(await canvasHasColor(page, '#preview-overlay', [255, 255, 255]), true, 'esikatselun ukko on valkoinen');
+      assert.deepEqual(await strayTextNodes(page), [], 'sivulla ei näy tekstiä null, undefined tai NaN');
       // oletukset: nimi tiedostosta, laji kirjastossa valittu, video tallennetaan
       assert.equal(await page.getByLabel('Nimi').inputValue(), 'pose_squats');
       assert.equal(await page.getByLabel('Laji').locator('option:checked').textContent(), 'Hip-hop');

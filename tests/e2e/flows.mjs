@@ -78,3 +78,16 @@ export async function waitForDrawing(page, selector, minOpaque = 500) {
     return false;
   }, [selector, minOpaque], { timeout: 15000 });
 }
+
+/** Etsii sivulta tekstisolmut, joiden sisältö on ohjelmointivirheen jälki (null, undefined, NaN, [object Object]). */
+export async function strayTextNodes(page) {
+  return page.evaluate(() => {
+    const bad = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const text = walker.currentNode.nodeValue.trim();
+      if (/^(null|undefined|NaN|\[object Object\])$/.test(text) || /\b(undefined|NaN)\b/.test(text)) bad.push(text);
+    }
+    return bad;
+  });
+}
